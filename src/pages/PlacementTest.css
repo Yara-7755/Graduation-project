@@ -1,0 +1,69 @@
+.placement-page {
+  min-height: 100vh;
+  background: #0f172a;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.placement-card {
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 40px;
+  width: 600px;
+  color: #e5e7eb;
+}
+
+.placement-card h1 {
+  text-align: center;
+}
+
+.subtitle {
+  text-align: center;
+  color: #94a3b8;
+  margin-bottom: 30px;
+}
+
+.question-box {
+  margin-bottom: 25px;
+}
+
+.question-box h3 {
+  margin-bottom: 10px;
+}
+
+.option {
+  display: block;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.option input {
+  margin-right: 8px;
+}
+
+.submit-btn,
+.continue-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 20px;
+  border: none;
+  margin-top: 20px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.submit-btn {
+  background: #e5e7eb;
+  color: #020617;
+}
+
+.continue-btn {
+  background: #3b82f6;
+  color: white;
+}
+
+.result {
+  text-align: center;
+}

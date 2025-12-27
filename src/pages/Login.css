@@ -1,0 +1,81 @@
+/* نفس روح landing.css */
+.auth-page {
+  min-height: 100vh;
+  background: #0f172a;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  color: #e5e7eb;
+}
+
+.auth-card {
+  width: 420px;
+  max-width: 95%;
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 32px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.55);
+}
+
+.auth-title {
+  text-align: center;
+  margin-bottom: 18px;
+  font-size: 28px;
+  color: #e5e7eb;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: #0b1220;
+  color: #e5e7eb;
+  outline: none;
+}
+
+.auth-input:focus {
+  border-color: #64748b;
+}
+
+.auth-btn {
+  margin-top: 4px;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: #e5e7eb;
+  color: #020617;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.auth-btn:hover {
+  opacity: 0.9;
+}
+
+.auth-message {
+  margin-top: 14px;
+  text-align: center;
+  color: #22c55e;
+}
+
+.auth-footer {
+  margin-top: 18px;
+  text-align: center;
+  color: #cbd5f5;
+  font-size: 14px;
+}
+
+.auth-link {
+  cursor: pointer;
+  color: #e5e7eb;
+  text-decoration: underline;
+}
