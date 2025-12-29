@@ -1,93 +1,67 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
+import { useEffect, useRef } from "react";
 import "./Home.css";
 
 function Home() {
-  const navigate = useNavigate();
-  const [selectedField, setSelectedField] = useState("");
-  const user = JSON.parse(localStorage.getItem("user"));
+  const carouselRef = useRef(null);
+
+  useEffect(() => {
+    const carrossel = carouselRef.current;
+    const items = carrossel.querySelectorAll(".carrossel-item");
+    const total = items.length;
+    const radius = 120; 
+
+    
+    items.forEach((item, index) => {
+      const angle = (360 / total) * index;
+      item.style.transform = `rotateY(${angle}deg) translateZ(${radius}px)`;
+    });
+
+    let angle = 0;
+    let animationFrameId;
+
+    const rotate = () => {
+      angle += 0.5; //speed
+      carrossel.style.transform = `rotateY(-${angle}deg)`;
+      animationFrameId = requestAnimationFrame(rotate);
+    };
+
+    rotate();
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, []);
 
   const fields = [
     "Frontend Development",
     "Backend Development",
+    "Data Science",
     "Cybersecurity",
-    "Databases",
-    "Software Engineering",
+    "Cloud Computing",
+    "UI/UX Design",
   ];
-
-  const handleSelectField = async (field) => {
-    setSelectedField(field);
-
-    try {
-      await fetch("http://localhost:5001/user/field", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user.id,
-          field,
-        }),
-      });
-
-      localStorage.setItem("field", field);
-    } catch (err) {
-      console.error("Failed to save field", err);
-    }
-  };
 
   return (
     <div className="home-page">
-      <Navbar />
-
       {/* HERO */}
-      <section className="home-hero fade-in">
-        <h1>
-          Welcome to <span>Cognito</span> 👋
+      <div className="home-hero">
+        <h1 className="welcome-text">
+          Welcome to <span>COGNITO</span>
         </h1>
         <p>
-          Choose your learning field and start your IT journey with confidence.
+          A smart platform to assess your IT level, choose a field, and progress
+          through a structured learning roadmap.
         </p>
-      </section>
+      </div>
 
-      {/* ARTICLE */}
-      <section className="article-section slide-up">
-        <h2>Where is IT heading today?</h2>
-        <p>
-          IT today is driven by AI, cloud computing, cybersecurity, and scalable
-          systems. Choosing the right field early helps you grow with clarity
-          and purpose.
-        </p>
-      </section>
-
-      {/* FIELDS */}
-      <section className="fields slide-up">
-        <h2>Select Your Field</h2>
-
-        <div className="field-grid">
-          {fields.map((field) => (
-            <div
-              key={field}
-              className={`field-card ${
-                selectedField === field ? "selected" : ""
-              }`}
-              onClick={() => handleSelectField(field)}
-            >
+      {/* CAROUSEL */}
+      <div className="container-carrossel">
+        <div className="carrossel" ref={carouselRef}>
+          {fields.map((field, index) => (
+            <div className="carrossel-item" key={index}>
               {field}
             </div>
           ))}
         </div>
-      </section>
-
-      {/* CTA */}
-      <section className="cta">
-        <button
-          className="primary-btn"
-          disabled={!selectedField}
-          onClick={() => navigate("/placement-test")}
-        >
-          Start Placement Test
-        </button>
-      </section>
+      </div>
     </div>
   );
 }
