@@ -20,7 +20,7 @@ function Fields() {
     {
       name: "Software Engineering",
       description:
-        "Focus on problem solving, algorithms, software design, and development methodologies.",
+        "Learn how to design, develop, test, and maintain software systems using engineering principles, best practices, version control, and collaborative workflows.",
     },
     {
       name: "Databases",
@@ -28,9 +28,9 @@ function Fields() {
         "Learn data modeling, SQL, database management systems, and performance optimization.",
     },
     {
-      name: "Cybersecurity",
+      name: "Programming Fundamentals",
       description:
-        "Protect systems, networks, and data from attacks and vulnerabilities.",
+        "Start your journey by learning the basic programming concepts, coding techniques and fundamental Algorithms.",
     },
   ];
 
@@ -91,3 +91,4 @@ function Fields() {
 }
 
 export default Fields;
+
