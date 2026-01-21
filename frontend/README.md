@@ -1,16 +1,30 @@
-# React + Vite
+# Cognito Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This module represents the frontend of the Cognito system. It provides an interactive and responsive user interface that allows users to register, log in, take the placement test, and view their learning progress.
 
-Currently, two official plugins are available:
+## Main Pages
+- Landing Page
+- Signup Page
+- Login Page
+- Home Page
+- Placement Test Page
+- Field Selection Page
+- Dashboard Page
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Technologies Used
+- React.js
+- Vite
+- JavaScript (ES6)
+- CSS (Custom animations and styling)
+- React Router
 
-## React Compiler
+## Key Features
+- Form validation for login and signup
+- Animated UI components
+- Dynamic content rendering based on user data
+- Conditional navigation based on placement test completion
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## How to Run
+```bash
+npm install
+npm run dev
