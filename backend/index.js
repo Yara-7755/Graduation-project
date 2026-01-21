@@ -1,4 +1,4 @@
-// ================== IMPORTS ==================
+//IMPORTS 
 import express from "express";
 import cors from "cors";
 import pkg from "pg";
@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 dotenv.config();
 const { Pool } = pkg;
 
-// ================== DB ==================
+//DB 
 const pool = new Pool({
   user: "postgres",
   host: "localhost",
@@ -16,21 +16,21 @@ const pool = new Pool({
   port: 5432,
 });
 
-// ================== APP ==================
+//APP 
 const app = express();
 const PORT = 5001;
 
 app.use(cors());
 app.use(express.json());
 
-// ================== HELPERS ==================
+// HELPERS 
 function calcLevel(score) {
   if (score >= 70) return "Advanced";
   if (score >= 40) return "Intermediate";
   return "Beginner";
 }
 
-// ================== TEST ==================
+//TEST 
 app.get("/", (req, res) => {
   res.json({ ok: true });
 });
@@ -50,7 +50,7 @@ app.get("/user/:id/paths", async (req, res) => {
   }
 });
 
-// ================== SIGNUP ==================
+//SIGNUP 
 app.post("/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -85,7 +85,7 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-// ================== LOGIN ==================
+//LOGIN 
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -106,7 +106,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// ================== SAVE USER FIELD ==================
+//SAVE USER FIELD 
 app.post("/user/path", async (req, res) => {
   try {
     const { userId, pathName } = req.body;
@@ -138,7 +138,7 @@ app.post("/user/path", async (req, res) => {
 });
 
 
-// ================== SUBMIT PLACEMENT TEST (PROTECTED) ==================
+//  SUBMIT PLACEMENT TEST (PROTECTED) 
 app.post("/placement-test/submit", async (req, res) => {
   try {
     const { userId, answers } = req.body;
@@ -147,7 +147,7 @@ app.post("/placement-test/submit", async (req, res) => {
       return res.status(400).json({ message: "Invalid submission data" });
     }
 
-    // 🔐 1️⃣ CHECK IF USER ALREADY COMPLETED TEST
+    //  CHECK IF USER ALREADY COMPLETED TEST
     const userCheck = await pool.query(
       "SELECT level FROM users WHERE id = $1",
       [userId]
@@ -163,7 +163,7 @@ app.post("/placement-test/submit", async (req, res) => {
       });
     }
 
-    // 2️⃣ CALCULATE SCORE
+    //  CALCULATE SCORE
     const ids = answers.map(a => a.questionId);
 
     const db = await pool.query(
@@ -182,7 +182,7 @@ app.post("/placement-test/submit", async (req, res) => {
     const score = Math.round((correct / answers.length) * 100);
     const level = calcLevel(score);
 
-    // 3️⃣ SAVE RESULT
+    //  SAVE RESULT
     await pool.query(
       "UPDATE users SET level=$1, placement_score=$2 WHERE id=$3",
       [level, score, userId]
@@ -195,7 +195,7 @@ app.post("/placement-test/submit", async (req, res) => {
   }
 });
 
-// ================== GET USER DATA ==================
+//  GET USER DATA 
 app.get("/user/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -219,7 +219,7 @@ app.get("/user/:id", async (req, res) => {
     res.status(500).json({ message: "Failed to load user data" });
   }
 });
-// ================== DELETE USER PATHS ==================
+// DELETE USER PATHS 
 app.delete("/user/paths", async (req, res) => {
   try {
     const { userId, paths } = req.body;
