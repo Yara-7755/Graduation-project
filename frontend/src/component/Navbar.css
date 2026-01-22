@@ -1,0 +1,125 @@
+/* =========================
+   NAVBAR
+========================= */
+.navbar {
+  height: 60px;
+  background: #020617;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 40px;
+  border-bottom: 1px solid #1e293b;
+  color: #e5e7eb;
+  position: relative;
+  z-index: 100;
+}
+
+/* =========================
+   LOGO + BRAND
+========================= */
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.nav-logo-icon {
+  width: 32px;
+  height: auto;
+  object-fit: contain;
+}
+
+.nav-logo-text {
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+/* =========================
+   USER AREA
+========================= */
+.nav-user {
+  position: relative;
+}
+
+/* AVATAR */
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.avatar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
+}
+
+/* =========================
+   DROPDOWN MENU
+========================= */
+.user-menu {
+  position: absolute;
+  right: 0;
+  top: 48px;
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 8px;
+  min-width: 160px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+  animation: menuFade 0.25s ease forwards;
+}
+
+/* DROPDOWN ANIMATION */
+@keyframes menuFade {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =========================
+   MENU ITEMS
+========================= */
+.menu-item {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #cbd5f5;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 14px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.menu-item:hover {
+  background: #1e293b;
+  color: #e5e7eb;
+}
+
+/* LOGOUT SPECIAL */
+.menu-item.logout {
+  color: #f87171;
+}
+
+.menu-item.logout:hover {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fecaca;
+}
