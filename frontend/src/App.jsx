@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 
 import Landing from "./pages/Landing";
 import Signup from "./pages/Signup";
@@ -7,7 +7,6 @@ import Home from "./pages/Home";
 import PlacementTest from "./pages/PlacementTest";
 import Fields from "./pages/Fields";
 import Dashboard from "./pages/Dashboard";
-
 import ChatbotWidget from "./components/ChatbotWidget";
 
 function App() {

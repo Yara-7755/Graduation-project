@@ -37,7 +37,7 @@ function Landing() {
         <div className="nav-right">
           <span
             className="nav-link"
-            onClick={() => setShowAbout(true)}
+            onClick={() => setShowAbout(false)}
           >
             About Us
           </span>
