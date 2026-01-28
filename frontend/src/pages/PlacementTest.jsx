@@ -80,8 +80,7 @@ function PlacementTest() {
         {!submitted &&
           questions.map((q, i) => (
             <div key={q.id} className="question-box">
-              <h3>{i + 1}. {q.question}</h3>
-
+              <h3>{i + 1}. {q.question_text ?? q.question}</h3>
               {[
                 ["A", q.option_a],
                 ["B", q.option_b],

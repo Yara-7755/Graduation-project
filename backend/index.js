@@ -12,8 +12,8 @@ const pool = new Pool({
   user: "postgres",
   host: "localhost",
   database: "cognito",
-  password: "Yamin@94",
-  port: 5432,
+  password: "2003",
+  port: 5433,
 });
 
 //APP 
@@ -243,7 +243,25 @@ app.delete("/user/paths", async (req, res) => {
     res.status(500).json({ message: "Failed to delete paths" });
   }
 });
+// GET PLACEMENT TEST QUESTIONS (?count=20)
+app.get("/placement-test/questions", async (req, res) => {
+  try {
+    const count = Number(req.query.count) || 20;
 
+    const result = await pool.query(
+      `SELECT id, question, option_a, option_b, option_c, option_d
+       FROM questions
+       ORDER BY RANDOM()
+       LIMIT $1`,
+      [count]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("LOAD QUESTIONS ERROR:", err);
+    res.status(500).json({ message: "Failed to load questions" });
+  }
+});
 // ================== START ==================
 app.listen(PORT, async () => {
   await pool.query("SELECT 1");
