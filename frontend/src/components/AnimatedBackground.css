@@ -1,0 +1,116 @@
+.animated-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  background-size: 55px 55px;
+  mask-image: radial-gradient(circle at center, black 35%, transparent 85%);
+  opacity: 0.35;
+}
+
+.radial-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.22;
+  animation: drift 12s ease-in-out infinite;
+}
+
+.glow-1 {
+  width: 280px;
+  height: 280px;
+  background: #38bdf8;
+  top: 8%;
+  left: 8%;
+}
+
+.glow-2 {
+  width: 320px;
+  height: 320px;
+  background: #6366f1;
+  right: 10%;
+  top: 18%;
+  animation-delay: 2s;
+}
+
+.glow-3 {
+  width: 260px;
+  height: 260px;
+  background: #22c55e;
+  bottom: 10%;
+  left: 40%;
+  animation-delay: 4s;
+}
+
+.home-line {
+  position: absolute;
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(96, 165, 250, 0.9),
+    transparent
+  );
+  opacity: 0.5;
+  animation: moveLine 8s linear infinite;
+}
+
+.line-1 {
+  width: 280px;
+  top: 22%;
+  left: -20%;
+}
+
+.line-2 {
+  width: 360px;
+  top: 48%;
+  right: -25%;
+  animation-delay: 2s;
+}
+
+.line-3 {
+  width: 240px;
+  bottom: 22%;
+  left: -15%;
+  animation-delay: 4s;
+}
+
+@keyframes drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(25px, -20px) scale(1.05);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes moveLine {
+  0% {
+    transform: translateX(0) translateY(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.55;
+  }
+  80% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateX(140vw);
+    opacity: 0;
+  }
+}
