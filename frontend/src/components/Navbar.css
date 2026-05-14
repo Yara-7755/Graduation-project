@@ -186,42 +186,6 @@
   margin: 8px 0;
 }
 
-.menu-language-label {
-  color: #94a3b8;
-  font-size: 12px;
-  padding: 4px 8px 8px;
-  font-weight: 700;
-}
-
-.language-switch {
-  display: flex;
-  gap: 8px;
-  padding: 0 4px 4px;
-}
-
-.language-btn {
-  flex: 1;
-  border: 1px solid #334155;
-  background: transparent;
-  color: #cbd5f5;
-  padding: 9px 10px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  transition: all 0.25s ease;
-}
-
-.language-btn:hover {
-  background: #1e293b;
-}
-
-.language-btn.active {
-  background: rgba(37, 99, 235, 0.16);
-  border-color: rgba(59, 130, 246, 0.35);
-  color: #93c5fd;
-}
-
 /* LOGOUT SPECIAL */
 .menu-item.logout {
   color: #f87171;

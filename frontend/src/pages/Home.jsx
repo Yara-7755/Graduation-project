@@ -32,22 +32,27 @@ function Home() {
   const [userData, setUserData] = useState(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
-  const particles = useMemo(
-    () =>
-      Array.from({ length: 24 }, (_, i) => ({
-        id: i,
-        left: `${Math.random() * 100}%`,
-        top: `${Math.random() * 100}%`,
-        delay: `${Math.random() * 8}s`,
-        duration: `${5 + Math.random() * 7}s`,
-        size: `${4 + Math.random() * 5}px`,
-      })),
-    []
-  );
+  const user = useMemo(() => {
+    try {
+      return (
+        JSON.parse(localStorage.getItem("user")) ||
+        JSON.parse(sessionStorage.getItem("user"))
+      );
+    } catch {
+      return null;
+    }
+  }, []);
 
-  const user =
-    JSON.parse(localStorage.getItem("user")) ||
-    JSON.parse(sessionStorage.getItem("user"));
+const [particles] = useState(() =>
+  Array.from({ length: 24 }, (_, i) => ({
+    id: i,
+    left: `${Math.random() * 100}%`,
+    top: `${Math.random() * 100}%`,
+    delay: `${Math.random() * 8}s`,
+    duration: `${5 + Math.random() * 7}s`,
+    size: `${4 + Math.random() * 5}px`,
+  }))
+);
 
   useEffect(() => {
     if (!user || !user.id) {
@@ -74,6 +79,16 @@ function Home() {
 
   const hasCompletedTest =
     userData?.level !== null && userData?.level !== undefined;
+
+  const selectedFields = Array.isArray(userData?.fields)
+    ? userData.fields
+    : userData?.field
+    ? [userData.field]
+    : [];
+
+  const fieldsText = selectedFields.length
+    ? selectedFields.join(", ")
+    : "Not Selected";
 
   const handleCardMove = (e) => {
     const card = e.currentTarget;
@@ -110,26 +125,36 @@ function Home() {
           <div
             className="grid-overlay"
             style={{
-              transform: `translate(${mousePosition.x * -12}px, ${mousePosition.y * -12}px)`,
+              transform: `translate(${mousePosition.x * -12}px, ${
+                mousePosition.y * -12
+              }px)`,
             }}
           />
 
           <div
             className="radial-glow glow-1"
             style={{
-              transform: `translate(${mousePosition.x * 28}px, ${mousePosition.y * 24}px)`,
+              transform: `translate(${mousePosition.x * 28}px, ${
+                mousePosition.y * 24
+              }px)`,
             }}
           />
+
           <div
             className="radial-glow glow-2"
             style={{
-              transform: `translate(${mousePosition.x * -34}px, ${mousePosition.y * -18}px)`,
+              transform: `translate(${mousePosition.x * -34}px, ${
+                mousePosition.y * -18
+              }px)`,
             }}
           />
+
           <div
             className="radial-glow glow-3"
             style={{
-              transform: `translate(${mousePosition.x * 22}px, ${mousePosition.y * -28}px)`,
+              transform: `translate(${mousePosition.x * 22}px, ${
+                mousePosition.y * -28
+              }px)`,
             }}
           />
 
@@ -169,11 +194,12 @@ function Home() {
               <>
                 <br />
                 <span className="hero-user-line">
-                  Welcome back, <span className="user-name">{userData.name}</span>
+                  Welcome back,{" "}
+                  <span className="user-name">{userData.name}</span>
                 </span>
               </>
             )}{" "}
-            🚀
+            
           </h1>
 
           <p>
@@ -219,35 +245,37 @@ function Home() {
               <span className="hero-stat-label">Current Level</span>
             </div>
 
-                  <div className="hero-stat-card">
-        <span className="hero-stat-number">
-          {userData?.field || "Not Selected"}
-        </span>
-        <span className="hero-stat-label">
-          {userData?.level ? `Level: ${userData.level}` : "Field Status"}
-        </span>
-      </div>
+            <div className="hero-stat-card">
+              <span className="hero-stat-number">{fieldsText}</span>
+              <span className="hero-stat-label">
+                {userData?.level ? `Level: ${userData.level}` : "Field Status"}
+              </span>
+            </div>
 
-           <div className="hero-stat-card">
-  <span className="hero-stat-number">
-    {hasCompletedTest ? "Path Ready" : "Locked"}
-  </span>
-  <span className="hero-stat-label">
-    {hasCompletedTest
-      ? userData?.field || "Start Learning"
-      : "Personalized Path"}
-  </span>
-</div>
+            <div className="hero-stat-card">
+              <span className="hero-stat-number">
+                {hasCompletedTest ? "Path Ready" : "Locked"}
+              </span>
+              <span className="hero-stat-label">
+                {hasCompletedTest
+                  ? selectedFields.length
+                    ? fieldsText
+                    : "Start Learning"
+                  : "Personalized Path"}
+              </span>
+            </div>
           </div>
         </section>
 
         <section className="next-step-card fade-in">
           <div className="next-step-badge">Your Next Step</div>
+
           <h3>
             {hasCompletedTest
               ? "Your personalized learning journey is ready."
               : "Take the placement test to unlock your personalized path."}
           </h3>
+
           <p>
             {hasCompletedTest
               ? "Explore your selected field, continue your roadmap topic by topic, and monitor your academic progress through the dashboard."
@@ -256,7 +284,10 @@ function Home() {
 
           <div className="next-step-actions">
             {!hasCompletedTest ? (
-              <button className="primary-btn small-btn" onClick={handlePlacementClick}>
+              <button
+                className="primary-btn small-btn"
+                onClick={handlePlacementClick}
+              >
                 <span className="btn-glow"></span>
                 <span className="btn-text">Take Placement Test</span>
               </button>
@@ -272,7 +303,8 @@ function Home() {
 
             <button
               className="outline-btn small-outline-btn"
-              onClick={() => navigate("/paths-overview")}            >
+              onClick={() => navigate("/paths-overview")}
+            >
               Explore Fields
             </button>
           </div>
@@ -290,6 +322,7 @@ function Home() {
               <div className="article-shine"></div>
               <div className="article-blur"></div>
               <div className="article-index">0{index + 1}</div>
+
               <h2>{article.title}</h2>
               <p>{article.text}</p>
 

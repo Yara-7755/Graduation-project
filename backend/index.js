@@ -3,11 +3,34 @@ import cors from "cors";
 import pkg from "pg";
 import dotenv from "dotenv";
 import { OAuth2Client } from "google-auth-library";
+import puppeteer from "puppeteer";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import bcrypt from "bcrypt";
+import {
+  buildCodeReviewPrompt,
+  isSupportedCodeReviewField,
+} from "./prompts/codeReviewPrompt.js";
+
 import { analyzeQuizPerformance } from "./services/analysisService.js";
 import { generateCodeQuiz } from "./services/quizGenerationService.js";
 import { callAI } from "./services/aiService.js";
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const logoBase64 = fs.readFileSync(
+  path.join(__dirname, "assets", "Logo_icon.png"),
+  "base64"
+);
+
+const signatureBase64 = fs.readFileSync(
+  path.join(__dirname, "assets", "signature.png"),
+  "base64"
+);
 
 const { Pool } = pkg;
 
@@ -28,9 +51,9 @@ const PORT = process.env.PORT || 5001;
 
 app.use(cors());
 app.use(express.json());
-
-// ================== HELPERS ==================
-function buildChatbotFallbackReply(message, userContext) {
+app.use("/assets", express.static(path.join(__dirname, "assets")));
+//================ HELPERS ==================
+function buildChatbotFallbackReply(message, userContext) {// اذا لا سمح الله وقع الai بنضمن انه يضل الموقع شغال بحيث اذا شاف اي كملة مألوفه اله يرجع جواب لليوزر
   const text = String(message || "").toLowerCase();
 
   if (text.includes("frontend") && text.includes("backend")) {
@@ -85,7 +108,7 @@ You can ask me to compare any two of them.`;
 - how to choose your field`;
 }
 
-function normalizeText(value) {
+function normalizeText(value) {//
   return String(value || "")
     .replace(/\s+/g, " ")
     .trim()
@@ -112,7 +135,7 @@ function getWeakAreasFromHistory(historyRows) {
     .map(([tag]) => tag);
 }
 
-function getDifficultyStep(level, wrongHistoryCount) {
+function getDifficultyStep(level, wrongHistoryCount) { 
   if (level === "Beginner") {
     if (wrongHistoryCount >= 6) return 1;
     if (wrongHistoryCount >= 3) return 2;
@@ -130,19 +153,19 @@ function getDifficultyStep(level, wrongHistoryCount) {
   return 3;
 }
 
-function calcLevel(score) {
+function calcLevel(score) {// بتحول العلامة لمستوى فوق او يساوي70 متقدم فوق او يساوي 40 وسط والباقي ضعيف
   if (score >= 70) return "Advanced";
   if (score >= 40) return "Intermediate";
   return "Beginner";
 }
 
-function isValidFullName(name) {
+function isValidFullName(name) {// بتتأكد انه الاسم من مقطعين
   if (!name) return false;
   const parts = name.trim().split(/\s+/);
   return parts.length >= 2;
 }
 
-function isValidPhone(phone) {
+function isValidPhone(phone) { //بنتأكد من رقم التلفون
   if (!phone) return false;
   return /^[0-9+\-\s]{8,20}$/.test(phone.trim());
 }
@@ -185,12 +208,12 @@ const fullCodeSupportFields = [
   "Mobile Development",
 ];
 
-function supportsCodeQuiz(fieldName) {
+function supportsCodeQuiz(fieldName) { //بنتأكد انه الباث بدعم اسئلة الكود
   if (!fieldName) return false;
   return fullCodeSupportFields.includes(fieldName);
 }
 
-async function ensureFirstTopicUnlockedForRoadmap(client, userId, roadmapId) {
+async function ensureFirstTopicUnlockedForRoadmap(client, userId, roadmapId) {//بتفتح اول توبك تلقائي لليوزر
   const firstTopicResult = await client.query(
     `
     SELECT id
@@ -463,6 +486,12 @@ app.post("/signup", async (req, res) => {
       });
     }
 
+    if (String(password).length < 8) {
+      return res.status(400).json({
+        message: "Password must be at least 8 characters",
+      });
+    }
+
     const exists = await pool.query("SELECT id FROM users WHERE email = $1", [
       email,
     ]);
@@ -471,7 +500,6 @@ app.post("/signup", async (req, res) => {
       return res.status(400).json({ message: "Email already exists" });
     }
 
-    // ✅ تحديد الرول
     let role = "user";
 
     if (accountType === "admin") {
@@ -481,11 +509,13 @@ app.post("/signup", async (req, res) => {
       role = "admin";
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const result = await pool.query(
       `INSERT INTO users (name, email, password, phone, university_major, auth_provider, role)
        VALUES ($1, $2, $3, $4, $5, 'local', $6)
        RETURNING id, name, email, phone, university_major, field, level, placement_score, google_id, auth_provider, avatar_url, role`,
-      [name, email, password, phone, universityMajor, role]
+      [name, email, hashedPassword, phone, universityMajor, role]
     );
 
     res.status(201).json({
@@ -497,29 +527,43 @@ app.post("/signup", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 // ================== LOGIN ==================
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+      return res.status(400).json({ message: "Missing email or password" });
+    }
+
     const result = await pool.query(
-      `SELECT id, name, email, phone, university_major, field, level, placement_score, google_id, auth_provider, avatar_url, role
+      `SELECT id, name, email, password, phone, university_major, field, level, placement_score, google_id, auth_provider, avatar_url, role
        FROM users
-       WHERE email = $1 AND password = $2`,
-      [email, password]
+       WHERE email = $1`,
+      [email]
     );
 
     if (result.rows.length === 0) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    res.json({ user: result.rows[0] });
+    const dbUser = result.rows[0];
+
+    const passwordMatch = await bcrypt.compare(password, dbUser.password);
+
+    if (!passwordMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    const { password: _removedPassword, ...safeUser } = dbUser;
+
+    res.json({ user: safeUser });
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     res.status(500).json({ message: "Login failed" });
   }
 });
-
 // ================== GOOGLE AUTH ==================
 app.post("/auth/google", async (req, res) => {
   try {
@@ -1016,19 +1060,24 @@ app.put("/admin/resources/:id", async (req, res) => {
   }
 });
 // ================== ADMIN: GET LEARNERS ==================
-app.get("/admin/learners", async (req, res) => {
+app.get("/admin/learners", requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        id,
-        name,
-        email,
-        field,
-        level,
-        placement_score
-      FROM users
-      WHERE role = 'user'
-      ORDER BY id DESC
+        u.id,
+        u.name,
+        u.email,
+        COALESCE(
+          u.field,
+          STRING_AGG(DISTINCT up.path_name, ', ')
+        ) AS field,
+        u.level,
+        u.placement_score
+      FROM users u
+      LEFT JOIN user_paths up ON up.user_id = u.id
+      WHERE COALESCE(u.role, 'user') = 'user'
+      GROUP BY u.id, u.name, u.email, u.field, u.level, u.placement_score
+      ORDER BY u.id DESC
     `);
 
     res.json(result.rows);
@@ -1037,23 +1086,46 @@ app.get("/admin/learners", async (req, res) => {
     res.status(500).json({ message: "Failed to fetch learners" });
   }
 });
+
 // ================== ADMIN: STATS ==================
 app.get("/admin/stats", requireAdmin, async (req, res) => {
   try {
-    const users = await pool.query(`SELECT COUNT(*) FROM users WHERE role='user'`);
-    const topics = await pool.query(`SELECT COUNT(*) FROM roadmap_topics`);
-    const questions = await pool.query(`SELECT COUNT(*) FROM questions`);
-    const resources = await pool.query(`SELECT COUNT(*) FROM resources`);
+    const users = await pool.query(`
+      SELECT COUNT(*) 
+      FROM users 
+      WHERE COALESCE(role, 'user') = 'user'
+    `);
+
+    const topics = await pool.query(`
+      SELECT COUNT(*) 
+      FROM roadmap_topics
+    `);
+
+    const questions = await pool.query(`
+      SELECT COUNT(*) 
+      FROM questions
+    `);
+
+    const resources = await pool.query(`
+      SELECT COUNT(*) 
+      FROM resources
+    `);
+
+    const completedQuizzes = await pool.query(`
+      SELECT COUNT(*) 
+      FROM user_topic_progress
+      WHERE status = 'completed'
+    `);
 
     res.json({
       usersCount: Number(users.rows[0].count),
       topicsCount: Number(topics.rows[0].count),
       questionsCount: Number(questions.rows[0].count),
       resourcesCount: Number(resources.rows[0].count),
-      completedQuizzesCount: 0,
+      completedQuizzesCount: Number(completedQuizzes.rows[0].count),
     });
   } catch (err) {
-    console.error(err);
+    console.error("ADMIN STATS ERROR:", err);
     res.status(500).json({ message: "Failed to fetch stats" });
   }
 });
@@ -1062,16 +1134,22 @@ app.get("/admin/stats", requireAdmin, async (req, res) => {
 app.get("/admin/topics", requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, title, description, topic_order AS order_number, is_active,
-      (SELECT field_name FROM roadmaps WHERE id = roadmap_id LIMIT 1) AS field,
-      (SELECT level FROM roadmaps WHERE id = roadmap_id LIMIT 1) AS level
-      FROM roadmap_topics
-      ORDER BY topic_order ASC
+      SELECT 
+        rt.id,
+        rt.title,
+        rt.description,
+        rt.topic_order AS order_number,
+        rt.is_active,
+        r.field_name AS field,
+        r.level
+      FROM roadmap_topics rt
+      LEFT JOIN roadmaps r ON r.id = rt.roadmap_id
+      ORDER BY r.field_name ASC, r.level ASC, rt.topic_order ASC, rt.id ASC
     `);
 
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    console.error("GET TOPICS ERROR:", err);
     res.status(500).json({ message: "Failed to fetch topics" });
   }
 });
@@ -1080,14 +1158,20 @@ app.get("/admin/topics", requireAdmin, async (req, res) => {
 app.get("/admin/questions", requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT *
-      FROM questions
-      ORDER BY id DESC
+      SELECT 
+        q.*,
+        rt.title AS topic_title,
+        r.field_name AS field,
+        r.level
+      FROM questions q
+      LEFT JOIN roadmap_topics rt ON rt.id = q.topic_id
+      LEFT JOIN roadmaps r ON r.id = rt.roadmap_id
+      ORDER BY q.id DESC
     `);
 
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    console.error("GET QUESTIONS ERROR:", err);
     res.status(500).json({ message: "Failed to fetch questions" });
   }
 });
@@ -1096,40 +1180,483 @@ app.get("/admin/questions", requireAdmin, async (req, res) => {
 app.get("/admin/resources", requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT *
-      FROM resources
-      ORDER BY id DESC
+      SELECT 
+        res.*,
+        rt.title AS topic_title,
+        r.field_name AS field,
+        r.level AS roadmap_level
+      FROM resources res
+      LEFT JOIN roadmap_topics rt ON rt.id = res.topic_id
+      LEFT JOIN roadmaps r ON r.id = rt.roadmap_id
+      ORDER BY res.id DESC
     `);
 
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    console.error("GET RESOURCES ERROR:", err);
     res.status(500).json({ message: "Failed to fetch resources" });
   }
 });
+// ================== ROADMAP CERTIFICATE ==================
+app.get("/certificate/roadmap/:field/:level/:userId", async (req, res) => {
+  try {
+    const { field, level, userId } = req.params;
 
+    const logoBase64 = fs.readFileSync(
+      path.join(__dirname, "assets", "Logo_icon.png"),
+      "base64"
+    );
+
+    const signatureBase64 = fs.readFileSync(
+      path.join(__dirname, "assets", "signature.png"),
+      "base64"
+    );
+
+    const userResult = await pool.query(
+      `SELECT name FROM users WHERE id = $1 LIMIT 1`,
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const userName = userResult.rows[0].name;
+
+    const roadmapResult = await pool.query(
+      `
+      SELECT id, title, description, field_name, level
+      FROM roadmaps
+      WHERE field_name ILIKE $1 AND level ILIKE $2
+      LIMIT 1
+      `,
+      [field, level]
+    );
+
+    if (roadmapResult.rows.length === 0) {
+      return res.status(404).json({ message: "Roadmap not found" });
+    }
+
+    const roadmap = roadmapResult.rows[0];
+
+    const progressResult = await pool.query(
+      `
+      SELECT 
+        COUNT(rt.id)::int AS total_topics,
+        COUNT(utp.topic_id)::int AS completed_topics,
+        COALESCE(ROUND(AVG(utp.score)::numeric, 0), 0)::int AS average_score
+      FROM roadmap_topics rt
+      LEFT JOIN user_topic_progress utp
+        ON utp.topic_id = rt.id
+       AND utp.user_id = $1
+       AND utp.status = 'completed'
+      WHERE rt.roadmap_id = $2
+        AND rt.is_active = true
+      `,
+      [userId, roadmap.id]
+    );
+
+    const progress = progressResult.rows[0];
+
+    if (
+      Number(progress.total_topics) === 0 ||
+      Number(progress.completed_topics) < Number(progress.total_topics)
+    ) {
+      return res.status(403).json({
+        message: "Roadmap is not completed yet",
+      });
+    }
+
+    const date = new Date().toLocaleDateString("en-GB");
+    const averageScore = progress.average_score || 0;
+
+ const html = `
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #fff;
+    font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
+  }
+
+  .certificate {
+    width: 1120px;
+    height: 790px;
+    background: #ffffff;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ===== FULL BORDER ALL SIDES ===== */
+  .border-top {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 14px;
+    background: #0b3c78;
+    z-index: 10;
+  }
+  .border-top-gold {
+    position: absolute;
+    top: 14px; left: 0;
+    width: 100%; height: 5px;
+    background: #c9a227;
+    z-index: 10;
+  }
+
+  .border-bottom {
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 100%; height: 14px;
+    background: #0b3c78;
+    z-index: 10;
+  }
+  .border-bottom-gold {
+    position: absolute;
+    bottom: 14px; left: 0;
+    width: 100%; height: 5px;
+    background: #c9a227;
+    z-index: 10;
+  }
+
+  .border-left {
+    position: absolute;
+    top: 0; left: 0;
+    width: 14px; height: 100%;
+    background: #0b3c78;
+    z-index: 10;
+  }
+  .border-left-gold {
+    position: absolute;
+    top: 0; left: 14px;
+    width: 5px; height: 100%;
+    background: #c9a227;
+    z-index: 10;
+  }
+
+  .border-right {
+    position: absolute;
+    top: 0; right: 0;
+    width: 14px; height: 100%;
+    background: #0b3c78;
+    z-index: 10;
+  }
+  .border-right-gold {
+    position: absolute;
+    top: 0; right: 14px;
+    width: 5px; height: 100%;
+    background: #c9a227;
+    z-index: 10;
+  }
+
+  /* ===== HEADER ===== */
+  .header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 155px;
+    background: #0b3c78;
+    z-index: 2;
+  }
+
+.logo {
+  position: absolute;
+  top: 20px;
+  left: 50px;
+  width: 180px;   
+  height: auto;   
+}
+
+  /* ===== GOLD DIAGONAL STRIPE ===== */
+  .gold-stripe-wrapper {
+    position: absolute;
+    top: 128px;
+    left: 0;
+    width: 100%;
+    z-index: 3;
+    overflow: hidden;
+    height: 58px;
+  }
+
+  .gold-stripe-1 {
+    position: absolute;
+    top: 0; left: -5%;
+    width: 110%; height: 20px;
+    background: #f4b400;
+    transform: skewY(-2.5deg);
+    transform-origin: left center;
+  }
+
+  .gold-stripe-2 {
+    position: absolute;
+    top: 22px; left: -5%;
+    width: 110%; height: 11px;
+    background: #d4af37;
+    transform: skewY(-2.5deg);
+    transform-origin: left center;
+    opacity: 0.55;
+  }
+
+  /* ===== CONTENT ===== */
+  .content {
+    position: absolute;
+    top: 195px;
+    left: 0; right: 0;
+    text-align: center;
+    padding: 0 100px;
+  }
+
+  .title {
+    font-size: 60px;
+    font-weight: 900;
+    letter-spacing: 12px;
+    color: #0b3c78;
+    line-height: 1;
+  }
+
+  .subtitle {
+    font-size: 17px;
+    color: #c9a227;
+    letter-spacing: 6px;
+    font-weight: 700;
+    margin-top: 10px;
+  }
+
+  .divider {
+    width: 300px;
+    height: 1.5px;
+    background: linear-gradient(to right, transparent, #c9a227, transparent);
+    margin: 18px auto;
+  }
+
+  .presented {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: #4b5563;
+    margin-bottom: 18px;
+  }
+
+  .name {
+    font-size: 50px;
+    font-family: "Brush Script MT", "Comic Sans MS", cursive;
+    color: #0b3c78;
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+
+  .name-underline {
+    width: 400px;
+    height: 2px;
+    background: #c9a227;
+    margin: 0 auto 22px;
+  }
+
+  .desc {
+    font-size: 14px;
+    color: #6b7280;
+    line-height: 1.8;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .desc b {
+    color: #0b3c78;
+    font-weight: 700;
+  }
+
+  /* ===== FOOTER ===== */
+  .footer {
+    position: absolute;
+    left: 160px;
+    right: 160px;
+    bottom: 95px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .footer-block {
+    text-align: center;
+    width: 210px;
+  }
+
+  .footer-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #0b3c78;
+    margin-top: 6px;
+  }
+
+  .footer-date {
+    font-size: 20px;
+    font-weight: 700;
+    color: #0b3c78;
+    margin-bottom: 5px;
+    letter-spacing: 1px;
+  }
+
+  .gold-line {
+    width: 100%;
+    height: 2px;
+    background: #c9a227;
+    margin: 4px 0;
+  }
+
+  .signature-img {
+    width: 170px;
+    display: block;
+    margin: 0 auto -18px;
+  }
+</style>
+</head>
+<body>
+  <div class="certificate">
+
+    <!-- FULL BORDERS -->
+    <div class="border-top"></div>
+    <div class="border-top-gold"></div>
+    <div class="border-bottom"></div>
+    <div class="border-bottom-gold"></div>
+    <div class="border-left"></div>
+    <div class="border-left-gold"></div>
+    <div class="border-right"></div>
+    <div class="border-right-gold"></div>
+
+    <!-- HEADER -->
+    <div class="header">
+      <img src="data:image/png;base64,${logoBase64}" class="logo" />
+    </div>
+
+    <!-- GOLD DIAGONAL STRIPE -->
+    <div class="gold-stripe-wrapper">
+      <div class="gold-stripe-1"></div>
+      <div class="gold-stripe-2"></div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+      <div class="title">CERTIFICATE</div>
+      <div class="subtitle">OF COMPLETION</div>
+      <div class="divider"></div>
+      <div class="presented">THIS CERTIFICATE IS PROUDLY PRESENTED TO</div>
+      <div class="name">${userName}</div>
+      <div class="name-underline"></div>
+      <div class="desc">
+        For successfully completing the full <b>${roadmap.field_name}</b> roadmap at
+        <b>${roadmap.level}</b> level with an average score of
+        <b>${averageScore}%</b>.
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+
+      <div class="footer-block">
+        <div class="footer-date">${date}</div>
+        <div class="gold-line"></div>
+        <div class="footer-label">DATE</div>
+      </div>
+
+      <div class="footer-block">
+        <img src="data:image/png;base64,${signatureBase64}" class="signature-img" />
+        <div class="gold-line"></div>
+        <div class="footer-label">SIGNATURE</div>
+      </div>
+
+    </div>
+
+  </div>
+</body>
+</html>
+`;
+
+    const browser = await puppeteer.launch({
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+
+    const page = await browser.newPage();
+
+    await page.setContent(html, { waitUntil: "load" });
+
+    const pdf = await page.pdf({
+  width: "1120px",
+  height: "790px",
+  printBackground: true,
+  margin: {
+    top: "0px",
+    right: "0px",
+    bottom: "0px",
+    left: "0px",
+  },
+});
+
+    await browser.close();
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename=roadmap-certificate-${userId}.pdf`,
+    });
+
+    res.send(pdf);
+  } catch (err) {
+    console.error("ROADMAP CERTIFICATE ERROR:", err);
+    res.status(500).json({ message: "Failed to generate roadmap certificate" });
+  }
+});
 // ================== ADMIN: ANALYTICS ==================
 app.get("/admin/analytics", requireAdmin, async (req, res) => {
   try {
     const usersByLevel = await pool.query(`
-      SELECT level, COUNT(*) FROM users GROUP BY level
+      SELECT 
+        COALESCE(level, 'Not Assigned') AS level,
+        COUNT(*)::int AS count
+      FROM users
+      WHERE COALESCE(role, 'user') = 'user'
+      GROUP BY COALESCE(level, 'Not Assigned')
+      ORDER BY count DESC
     `);
 
     const topFields = await pool.query(`
-      SELECT field, COUNT(*) FROM users GROUP BY field ORDER BY COUNT(*) DESC LIMIT 5
+      SELECT 
+        COALESCE(field_name, 'Not Assigned') AS field,
+        COUNT(*)::int AS count
+      FROM (
+        SELECT up.path_name AS field_name
+        FROM user_paths up
+
+        UNION ALL
+
+        SELECT u.field AS field_name
+        FROM users u
+        WHERE u.field IS NOT NULL
+          AND COALESCE(u.role, 'user') = 'user'
+      ) fields
+      GROUP BY COALESCE(field_name, 'Not Assigned')
+      ORDER BY count DESC
+      LIMIT 8
+    `);
+
+    const avgScore = await pool.query(`
+      SELECT COALESCE(ROUND(AVG(score)::numeric, 2), 0) AS avg
+      FROM user_topic_progress
+      WHERE score IS NOT NULL
     `);
 
     res.json({
       usersByLevel: usersByLevel.rows,
       topFields: topFields.rows,
-      avgQuizScore: 0,
+      avgQuizScore: Number(avgScore.rows[0]?.avg || 0),
     });
   } catch (err) {
-    console.error(err);
+    console.error("ADMIN ANALYTICS ERROR:", err);
     res.status(500).json({ message: "Failed to fetch analytics" });
   }
 });
-
 // ================== GET USER CALENDAR SUMMARY ==================
 app.get("/user/:id/calendar-summary", async (req, res) => {
   try {
@@ -1954,6 +2481,105 @@ app.post("/ai/generate-quiz", async (req, res) => {
     client.release();
   }
 });
+// ================== AI GENERATE CODING QUESTION ==================
+app.post("/ai/generate-coding-question", async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { userId, topicId, mcqScore, aiScore } = req.body;
+
+    if (!userId || !topicId) {
+      return res.status(400).json({ message: "Missing userId or topicId" });
+    }
+
+    const access = await getTopicAccessStatus(client, userId, topicId);
+
+    if (!access.found) {
+      return res.status(404).json({ message: "Topic not found" });
+    }
+
+    if (access.status === "locked") {
+      return res.status(403).json({ message: "This topic is locked" });
+    }
+
+    const topicInfo = await getTopicTitleAndLevel(client, topicId);
+
+    if (!topicInfo) {
+      return res.status(404).json({ message: "Topic info not found" });
+    }
+
+    const avgScore = Math.round((Number(mcqScore || 0) + Number(aiScore || 0)) / 2);
+
+    let difficulty = "easy";
+    if (avgScore >= 80) difficulty = "hard";
+    else if (avgScore >= 60) difficulty = "medium";
+
+    const prompt = `
+You are Cognito AI, an adaptive programming tutor.
+
+Generate ONE coding question for a student.
+
+Student context:
+- Field: ${topicInfo.field_name}
+- Topic: ${topicInfo.title}
+- Level: ${topicInfo.level}
+- MCQ Score: ${mcqScore}%
+- AI Quiz Score: ${aiScore}%
+- Difficulty should be: ${difficulty}
+
+Return ONLY valid JSON in this exact format:
+{
+  "title": "short title",
+  "description": "clear coding task",
+  "language": "JavaScript",
+  "starter_code": "starter code here",
+  "expected_output": "expected behavior or output",
+  "difficulty": "${difficulty}"
+}
+
+Rules:
+- Do not include markdown.
+- Do not include explanations outside JSON.
+- The task must match the topic.
+- Beginner: simple function.
+- Intermediate: function with condition/loop/array.
+- Advanced: more logic and edge cases.
+`;
+
+    const aiText = await callAI([
+      {
+        role: "user",
+        content: prompt,
+      },
+    ]);
+
+    let question;
+
+    try {
+      question = JSON.parse(aiText);
+    } catch (parseErr) {
+      console.error("CODING QUESTION JSON PARSE ERROR:", parseErr);
+      return res.status(500).json({
+        message: "AI returned invalid coding question format",
+      });
+    }
+
+    res.json({
+      ...question,
+      field_name: topicInfo.field_name,
+      topic_id: Number(topicId),
+      level: topicInfo.level,
+      difficulty,
+    });
+  } catch (err) {
+    console.error("AI GENERATE CODING QUESTION ERROR:", err);
+    res.status(500).json({
+      message: "Failed to generate coding question",
+    });
+  } finally {
+    client.release();
+  }
+});
 // ================== AI STUDY PLAN ==================
 app.post("/ai/study-plan", async (req, res) => {
   try {
@@ -2142,6 +2768,50 @@ ${JSON.stringify(topicsForPrompt, null, 2)}
   } catch (err) {
     console.error("AI STUDY PLAN ERROR:", err);
     return res.status(500).json({ message: "Failed to generate study plan" });
+  }
+});
+// ================== AI CODE REVIEW ==================
+app.post("/ai/code-review", async (req, res) => {
+  try {
+    const { fieldName, language, code } = req.body;
+
+    if (!fieldName || !language || !code) {
+      return res.status(400).json({
+        message: "fieldName, language, and code are required",
+      });
+    }
+
+    if (!isSupportedCodeReviewField(fieldName)) {
+      return res.status(400).json({
+        message: "This field does not support AI code review",
+      });
+    }
+
+    const messages = buildCodeReviewPrompt({
+      fieldName,
+      language,
+      code,
+    });
+
+    const aiResponse = await callAI(messages);
+
+    let result;
+
+    try {
+      result = JSON.parse(aiResponse);
+    } catch {
+      return res.status(500).json({
+        message: "AI returned invalid JSON",
+        raw: aiResponse,
+      });
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error("AI CODE REVIEW ERROR:", err);
+    res.status(500).json({
+      message: "Failed to review code",
+    });
   }
 });
 // ================== AI SUBMIT QUIZ ==================
@@ -3231,7 +3901,142 @@ app.get("/admin/analytics", requireAdmin, async (req, res) => {
     res.status(500).json({ message: "Failed to fetch analytics" });
   }
 });
+// ================== SAVE QUIZ SESSION ==================
+app.post("/quiz-session/save", async (req, res) => {
+  try {
+    const {
+      userId,
+      topicId,
+      stage,
+      mcqAnswers,
+      mcqIndex,
+      aiQuestions,
+      aiAnswers,
+      aiIndex,
+      codingQuestion,
+      codingAnswer,
+      codingResult,
+      mcqScore,
+      aiScore,
+    } = req.body;
 
+    if (!userId || !topicId) {
+      return res.status(400).json({ message: "Missing userId or topicId" });
+    }
+
+    await pool.query(
+      `
+      INSERT INTO quiz_sessions (
+        user_id,
+        topic_id,
+        stage,
+        mcq_answers,
+        mcq_index,
+        ai_questions,
+        ai_answers,
+        ai_index,
+        coding_question,
+        coding_answer,
+        coding_result,
+        mcq_score,
+        ai_score,
+        updated_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
+      ON CONFLICT (user_id, topic_id)
+      DO UPDATE SET
+        stage = EXCLUDED.stage,
+        mcq_answers = EXCLUDED.mcq_answers,
+        mcq_index = EXCLUDED.mcq_index,
+        ai_questions = EXCLUDED.ai_questions,
+        ai_answers = EXCLUDED.ai_answers,
+        ai_index = EXCLUDED.ai_index,
+        coding_question = EXCLUDED.coding_question,
+        coding_answer = EXCLUDED.coding_answer,
+        coding_result = EXCLUDED.coding_result,
+        mcq_score = EXCLUDED.mcq_score,
+        ai_score = EXCLUDED.ai_score,
+        updated_at = NOW()
+      `,
+      [
+        userId,
+        topicId,
+        stage || "mcq",
+        JSON.stringify(mcqAnswers || {}),
+        Number(mcqIndex || 0),
+        JSON.stringify(aiQuestions || []),
+        JSON.stringify(aiAnswers || {}),
+        Number(aiIndex || 0),
+        codingQuestion ? JSON.stringify(codingQuestion) : null,
+        codingAnswer || "",
+        codingResult ? JSON.stringify(codingResult) : null,
+        Number(mcqScore || 0),
+        Number(aiScore || 0),
+      ]
+    );
+
+    res.json({ message: "Quiz session saved" });
+  } catch (err) {
+    console.error("SAVE QUIZ SESSION ERROR:", err);
+    res.status(500).json({ message: "Failed to save quiz session" });
+  }
+});
+// ================== GET QUIZ SESSION ==================
+app.get("/quiz-session/:userId/:topicId", async (req, res) => {
+  try {
+    const { userId, topicId } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM quiz_sessions
+      WHERE user_id = $1
+        AND topic_id = $2
+        AND status = 'in_progress'
+      LIMIT 1
+      `,
+      [userId, topicId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ exists: false });
+    }
+
+    res.json({
+      exists: true,
+      session: result.rows[0],
+    });
+  } catch (err) {
+    console.error("GET QUIZ SESSION ERROR:", err);
+    res.status(500).json({ message: "Failed to load quiz session" });
+  }
+});
+// ================== COMPLETE QUIZ SESSION ==================
+app.put("/quiz-session/complete", async (req, res) => {
+  try {
+    const { userId, topicId } = req.body;
+
+    if (!userId || !topicId) {
+      return res.status(400).json({ message: "Missing userId or topicId" });
+    }
+
+    await pool.query(
+      `
+      UPDATE quiz_sessions
+      SET status = 'completed',
+          updated_at = NOW()
+      WHERE user_id = $1
+        AND topic_id = $2
+      `,
+      [userId, topicId]
+    );
+
+    res.json({ message: "Quiz session completed" });
+  } catch (err) {
+    console.error("COMPLETE QUIZ SESSION ERROR:", err);
+    res.status(500).json({ message: "Failed to complete quiz session" });
+  }
+});
 // ================== START SERVER ==================
 async function startServer() {
   try {

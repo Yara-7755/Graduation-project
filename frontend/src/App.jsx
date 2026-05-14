@@ -19,24 +19,36 @@ import ChatbotWidget from "./components/ChatbotWidget";
 import GlobalBackground from "./components/GlobalBackground";
 import AdminPanel from "./pages/AdminPanel";
 import SelectFieldPage from "./pages/SelectFieldPage";
+import CodeReviewPage from "./pages/CodeReviewPage";
+
+function getStoredUser() {
+  try {
+    return (
+      JSON.parse(localStorage.getItem("user")) ||
+      JSON.parse(sessionStorage.getItem("user"))
+    );
+  } catch {
+    return null;
+  }
+}
 
 function ProtectedAdminRoute({ children }) {
-  let user = null;
+  const user = getStoredUser();
 
-  try {
-    user =
-      JSON.parse(localStorage.getItem("user")) ||
-      JSON.parse(sessionStorage.getItem("user"));
-  } catch {
-    user = null;
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!user) return <Navigate to="/login" replace />;
 
   if (user.role !== "admin") {
     return <Navigate to="/home" replace />;
+  }
+
+  return children;
+}
+
+function LearnerOnlyRoute({ children }) {
+  const user = getStoredUser();
+
+  if (user?.role === "admin") {
+    return <Navigate to="/admin" replace />;
   }
 
   return children;
@@ -51,22 +63,140 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/placement-test" element={<PlacementTest />} />
-        <Route path="/fields" element={<Fields />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/complete-profile" element={<CompleteProfile />} />
 
-        <Route path="/select-field/roadmap" element={<SelectFieldPage mode="roadmap" />} />
-        <Route path="/select-field/grades" element={<SelectFieldPage mode="grades" />} />
+        <Route
+          path="/home"
+          element={
+            <LearnerOnlyRoute>
+              <Home />
+            </LearnerOnlyRoute>
+          }
+        />
 
-        <Route path="/roadmap/:fieldName" element={<RoadmapPage />} />
-        <Route path="/topic/:topicId" element={<Topic />} />
-        <Route path="/topic/:topicId/quiz" element={<TopicQuiz />} />
-        <Route path="/paths-overview" element={<PathsOverview />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/grades" element={<GradesPage />} />
-        <Route path="/calendar" element={<CalendarPage />} />
+        <Route
+          path="/placement-test"
+          element={
+            <LearnerOnlyRoute>
+              <PlacementTest />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/fields"
+          element={
+            <LearnerOnlyRoute>
+              <Fields />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/dashboard"
+          element={
+            <LearnerOnlyRoute>
+              <Dashboard />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/complete-profile"
+          element={
+            <LearnerOnlyRoute>
+              <CompleteProfile />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/select-field/roadmap"
+          element={
+            <LearnerOnlyRoute>
+              <SelectFieldPage mode="roadmap" />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/select-field/grades"
+          element={
+            <LearnerOnlyRoute>
+              <SelectFieldPage mode="grades" />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/roadmap/:fieldName"
+          element={
+            <LearnerOnlyRoute>
+              <RoadmapPage />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/topic/:topicId"
+          element={
+            <LearnerOnlyRoute>
+              <Topic />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/topic/:topicId/quiz"
+          element={
+            <LearnerOnlyRoute>
+              <TopicQuiz />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/paths-overview"
+          element={
+            <LearnerOnlyRoute>
+              <PathsOverview />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <LearnerOnlyRoute>
+              <ProfilePage />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/grades"
+          element={
+            <LearnerOnlyRoute>
+              <GradesPage />
+            </LearnerOnlyRoute>
+          }
+        />
+
+        <Route
+          path="/calendar"
+          element={
+            <LearnerOnlyRoute>
+              <CalendarPage />
+            </LearnerOnlyRoute>
+          }
+        />
+        <Route
+  path="/code-review"
+  element={
+    <LearnerOnlyRoute>
+      <CodeReviewPage />
+    </LearnerOnlyRoute>
+  }
+/>
 
         <Route
           path="/admin"

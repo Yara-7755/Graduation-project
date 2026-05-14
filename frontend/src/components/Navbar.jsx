@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "./Navbar.css";
 import logo from "../assets/Logo_icon.png";
@@ -8,72 +8,28 @@ function Navbar() {
   const location = useLocation();
 
   const [showMenu, setShowMenu] = useState(false);
-  const [language, setLanguage] = useState(
-    localStorage.getItem("cognito_language") || "en"
-  );
 
   const user =
     JSON.parse(localStorage.getItem("user")) ||
     JSON.parse(sessionStorage.getItem("user"));
 
-  const t = {
-    en: {
-      home: "Home",
-      paths: "Paths",
-      roadmap: "Roadmap",
-      dashboard: "Dashboard",
-      aiAssistant: "AI Assistant",
-      profile: "Profile",
-      grades: "Grades",
-      calendar: "Calendar",
-      language: "Language",
-      arabic: "Arabic",
-      english: "English",
-      logout: "Logout",
-    },
-    ar: {
-      home: "الرئيسية",
-      paths: "المسارات",
-      roadmap: "الخارطة",
-      dashboard: "لوحة التحكم",
-      aiAssistant: "المساعد الذكي",
-      profile: "الملف الشخصي",
-      grades: "العلامات",
-      calendar: "التقويم",
-      language: "اللغة",
-      arabic: "العربية",
-      english: "English",
-      logout: "تسجيل الخروج",
-    },
-  };
-
-  const text = t[language];
-
-  useEffect(() => {
-    localStorage.setItem("cognito_language", language);
-    window.dispatchEvent(
-      new CustomEvent("languageChanged", {
-        detail: { language },
-      })
-    );
-  }, [language]);
-
   const handleLogout = () => {
     localStorage.removeItem("user");
     sessionStorage.removeItem("user");
+    localStorage.removeItem("cognito_language");
     navigate("/login");
   };
 
- const handleOpenRoadmap = () => {
-  if (!user?.field && !user?.level) {
-    navigate("/fields");
-    setShowMenu(false);
-    return;
-  }
+  const handleOpenRoadmap = () => {
+    if (!user?.field && !user?.level) {
+      navigate("/fields");
+      setShowMenu(false);
+      return;
+    }
 
-  navigate("/select-field/roadmap");
-  setShowMenu(false);
-};
+    navigate("/select-field/roadmap");
+    setShowMenu(false);
+  };
 
   const openChatbot = () => {
     window.dispatchEvent(new Event("openChatbot"));
@@ -93,15 +49,15 @@ function Navbar() {
           className={`nav-link ${isActive("/home") ? "active" : ""}`}
           onClick={() => navigate("/home")}
         >
-          {text.home}
+          Home
         </button>
 
         <button
-  className={`nav-link ${isActive("/fields") ? "active" : ""}`}
-  onClick={() => navigate("/fields")}
->
-  {text.paths}
-</button>
+          className={`nav-link ${isActive("/fields") ? "active" : ""}`}
+          onClick={() => navigate("/fields")}
+        >
+          Paths
+        </button>
 
         <button
           className={`nav-link ${
@@ -109,20 +65,20 @@ function Navbar() {
           }`}
           onClick={handleOpenRoadmap}
         >
-          {text.roadmap}
+          Roadmap
         </button>
 
         <button
           className={`nav-link ${isActive("/dashboard") ? "active" : ""}`}
           onClick={() => navigate("/dashboard")}
         >
-          {text.dashboard}
+          Dashboard
         </button>
       </nav>
 
       <div className="nav-right">
         <button className="nav-ai-btn" onClick={openChatbot}>
-          🤖 {text.aiAssistant}
+          🤖 AI Assistant
         </button>
 
         <div className="nav-user">
@@ -139,7 +95,7 @@ function Navbar() {
                   setShowMenu(false);
                 }}
               >
-                {text.profile}
+                Profile
               </button>
 
               <button
@@ -149,7 +105,7 @@ function Navbar() {
                   setShowMenu(false);
                 }}
               >
-                {text.grades}
+                Grades
               </button>
 
               <button
@@ -159,37 +115,17 @@ function Navbar() {
                   setShowMenu(false);
                 }}
               >
-                {text.calendar}
+                Calendar
               </button>
 
               <button className="menu-item" onClick={handleOpenRoadmap}>
-                {text.roadmap}
+                Roadmap
               </button>
-
-              <div className="menu-divider"></div>
-
-              <div className="menu-language-label">{text.language}</div>
-
-              <div className="language-switch">
-                <button
-                  className={`language-btn ${language === "ar" ? "active" : ""}`}
-                  onClick={() => setLanguage("ar")}
-                >
-                  {text.arabic}
-                </button>
-
-                <button
-                  className={`language-btn ${language === "en" ? "active" : ""}`}
-                  onClick={() => setLanguage("en")}
-                >
-                  {text.english}
-                </button>
-              </div>
 
               <div className="menu-divider"></div>
 
               <button className="menu-item logout" onClick={handleLogout}>
-                {text.logout}
+                Logout
               </button>
             </div>
           )}

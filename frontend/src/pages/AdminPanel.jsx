@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
 import "./AdminPanel.css";
 
 const API_BASE = "http://localhost:5001";
@@ -1028,63 +1027,79 @@ function AdminPanel() {
     </div>
   );
 
-  return (
-    <>
-      <Navbar />
+ return (
+  <div className="admin-page">
+    <div className="admin-overlay"></div>
 
-      <div className="admin-page">
-        <div className="admin-overlay"></div>
-
-        <div className="admin-container">
-          <div className="admin-header">
-            <div>
-              <div className="admin-badge">System Administration</div>
-              <h1>Admin Control Panel</h1>
-              <p>
-                Manage Cognito learners, topics, quiz questions, resources, and
-                analytics from one place.
-              </p>
-            </div>
-
-            <button className="refresh-btn" onClick={loadAllData}>
-              Refresh Data
-            </button>
-          </div>
-
-          {pageMessage && (
-            <div className={`page-message ${pageMessageType === "error" ? "error" : ""}`}>
-              {pageMessage}
-            </div>
-          )}
-
-          <div className="admin-tabs">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                className={`admin-tab ${activeTab === tab.key ? "active" : ""}`}
-                onClick={() => setActiveTab(tab.key)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {loading ? (
-            <div className="admin-loading">Loading admin data...</div>
-          ) : (
-            <>
-              {activeTab === "overview" && renderOverview()}
-              {activeTab === "topics" && renderTopics()}
-              {activeTab === "questions" && renderQuestions()}
-              {activeTab === "resources" && renderResources()}
-              {activeTab === "learners" && renderLearners()}
-              {activeTab === "analytics" && renderAnalytics()}
-            </>
-          )}
+    <aside className="admin-sidebar">
+      <div className="admin-brand">
+        <div className="admin-brand-icon">C</div>
+        <div>
+          <h2>COGNITO</h2>
+          <span>Admin Dashboard</span>
         </div>
       </div>
-    </>
-  );
+
+      <div className="admin-tabs">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            className={`admin-tab ${activeTab === tab.key ? "active" : ""}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.key === "overview" && "▦"}
+            {tab.key === "topics" && "📚"}
+            {tab.key === "questions" && "❓"}
+            {tab.key === "resources" && "🔗"}
+            {tab.key === "learners" && "👥"}
+            {tab.key === "analytics" && "📊"}
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <button className="admin-back-btn" onClick={() => navigate("/home")}>
+        Back to Website
+      </button>
+    </aside>
+
+    <main className="admin-main">
+      <div className="admin-header">
+        <div>
+          <div className="admin-badge">System Administration</div>
+          <h1>Admin Control Panel</h1>
+          <p>
+            Manage Cognito learners, topics, quiz questions, resources, and
+            analytics from one place.
+          </p>
+        </div>
+
+        <button className="refresh-btn" onClick={loadAllData}>
+          Refresh Data
+        </button>
+      </div>
+
+      {pageMessage && (
+        <div className={`page-message ${pageMessageType === "error" ? "error" : ""}`}>
+          {pageMessage}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="admin-loading">Loading admin data...</div>
+      ) : (
+        <>
+          {activeTab === "overview" && renderOverview()}
+          {activeTab === "topics" && renderTopics()}
+          {activeTab === "questions" && renderQuestions()}
+          {activeTab === "resources" && renderResources()}
+          {activeTab === "learners" && renderLearners()}
+          {activeTab === "analytics" && renderAnalytics()}
+        </>
+      )}
+    </main>
+  </div>
+);
 }
 
 export default AdminPanel;

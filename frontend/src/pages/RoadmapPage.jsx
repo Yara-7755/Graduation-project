@@ -4,6 +4,8 @@ import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import "./RoadmapPage.css";
 
+const API_BASE = "http://localhost:5001";
+
 function RoadmapPage() {
   const [roadmapData, setRoadmapData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,9 +33,7 @@ function RoadmapPage() {
           return;
         }
 
-        const userRes = await fetch(
-          `http://localhost:5001/user/${storedUser.id}`
-        );
+        const userRes = await fetch(`${API_BASE}/user/${storedUser.id}`);
         const freshUser = await userRes.json();
 
         if (!userRes.ok) {
@@ -52,7 +52,7 @@ function RoadmapPage() {
         }
 
         const roadmapRes = await fetch(
-          `http://localhost:5001/roadmap/${encodeURIComponent(
+          `${API_BASE}/roadmap/${encodeURIComponent(
             selectedField
           )}/${encodeURIComponent(freshUser.level)}/${freshUser.id}`
         );
@@ -111,14 +111,29 @@ function RoadmapPage() {
     ? Math.round((completedTopics / roadmapData.topics.length) * 100)
     : 0;
 
+  const roadmapCompleted =
+    roadmapData.topics.length > 0 &&
+    completedTopics === roadmapData.topics.length;
+
   const getTopicScoreText = (topic) => {
     if (topic.status === "locked") return "Locked";
+
     if (topic.status === "completed") {
       return topic.score !== null && topic.score !== undefined
         ? `${topic.score}%`
         : "Completed";
     }
+
     return "Not attempted";
+  };
+
+  const handleDownloadRoadmapCertificate = () => {
+    window.open(
+      `${API_BASE}/certificate/roadmap/${encodeURIComponent(
+        roadmapData.roadmap.field_name
+      )}/${encodeURIComponent(roadmapData.roadmap.level)}/${storedUser.id}`,
+      "_blank"
+    );
   };
 
   return (
@@ -147,6 +162,25 @@ function RoadmapPage() {
               ></div>
             </div>
           </div>
+
+          {roadmapCompleted && (
+            <div className="roadmap-certificate-card">
+              <div>
+                <h3>🎓 Roadmap Certificate Available</h3>
+                <p>
+                  Congratulations! You completed the full roadmap. You can now
+                  download your certificate.
+                </p>
+              </div>
+
+              <button
+                className="certificate-btn"
+                onClick={handleDownloadRoadmapCertificate}
+              >
+                Download Certificate
+              </button>
+            </div>
+          )}
 
           <div className="topics-grid">
             {roadmapData.topics.map((topic) => (
@@ -206,11 +240,7 @@ function RoadmapPage() {
 
                   {topic.status === "completed" && (
                     <button
-                      className="open-btn"
-                      style={{
-                        background:
-                          "linear-gradient(135deg, #22c55e, #16a34a)",
-                      }}
+                      className="open-btn review-btn"
                       onClick={() => navigate(`/topic/${topic.id}`)}
                     >
                       ✅ Review

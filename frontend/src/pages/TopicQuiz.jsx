@@ -6,75 +6,122 @@ import "./TopicQuiz.css";
 
 const API_BASE = "http://localhost:5001";
 
+function getStoredUser() {
+  try {
+    return (
+      JSON.parse(localStorage.getItem("user")) ||
+      JSON.parse(sessionStorage.getItem("user"))
+    );
+  } catch {
+    return null;
+  }
+}
+
+function getQuestionText(q) {
+  return q.question || q.question_text || "Question";
+}
+
+function getOptionText(q, opt) {
+  const key = `option_${opt.toLowerCase()}`;
+  return q[key] || "";
+}
+
 function getQuestionTypeLabel(questionType, isAiStage) {
   if (!isAiStage) return "Standard Question";
   if (questionType === "output_prediction") return "Output Prediction";
   if (questionType === "find_the_error") return "Find the Error";
   if (questionType === "code_logic") return "Code Logic";
   if (questionType === "fill_the_blank") return "Fill the Blank";
-  return "AI Question";
+  return "AI Code Question";
+}
+
+function getAiFeedback(data) {
+  return (
+    data?.feedback ||
+    data?.aiFeedback ||
+    data?.analysis ||
+    data?.message ||
+    data?.result?.feedback ||
+    data?.result?.analysis ||
+    ""
+  );
+}
+
+function getCodingScore(data) {
+  return Number(
+    data?.score ||
+      data?.ai_score ||
+      data?.result?.score ||
+      data?.grade ||
+      0
+  );
 }
 
 function TopicQuiz() {
   const { topicId } = useParams();
   const navigate = useNavigate();
+  const user = getStoredUser();
 
-  const user =
-    JSON.parse(localStorage.getItem("user")) ||
-    JSON.parse(sessionStorage.getItem("user"));
-
-  const storageKey = useMemo(() => {
-    return `topic-quiz-progress-${user?.id || "guest"}-${topicId}`;
-  }, [topicId, user?.id]);
+  const storageKey = useMemo(
+    () => `topic-quiz-progress-${user?.id || "guest"}-${topicId}`,
+    [topicId, user?.id]
+  );
 
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
+  const [codingLoading, setCodingLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const [quizStage, setQuizStage] = useState("mcq"); // mcq | ai
+  const [quizStage, setQuizStage] = useState("mcq");
   const [result, setResult] = useState(null);
 
   const [mcqQuestions, setMcqQuestions] = useState([]);
   const [mcqAnswers, setMcqAnswers] = useState({});
   const [mcqIndex, setMcqIndex] = useState(0);
-  const [mcqCompleted, setMcqCompleted] = useState(false);
-  const [mcqSubmitted, setMcqSubmitted] = useState(false);
-  const [mcqResult, setMcqResult] = useState(null);
 
   const [aiQuestions, setAiQuestions] = useState([]);
   const [aiAnswers, setAiAnswers] = useState({});
   const [aiIndex, setAiIndex] = useState(0);
-  const [aiCompleted, setAiCompleted] = useState(false);
-  const [aiSubmitted, setAiSubmitted] = useState(false);
-  const [aiResult, setAiResult] = useState(null);
 
-  const resetAllState = useCallback(() => {
-    setError("");
-    setResult(null);
+  const [codingQuestion, setCodingQuestion] = useState(null);
+  const [codingAnswer, setCodingAnswer] = useState("");
+  const [codingResult, setCodingResult] = useState(null);
 
-    setQuizStage("mcq");
+  const [mcqScore, setMcqScore] = useState(0);
+  const [aiScore, setAiScore] = useState(0);
+  const [aiSubmitFeedback, setAiSubmitFeedback] = useState("");
 
-    setMcqQuestions([]);
-    setMcqAnswers({});
-    setMcqIndex(0);
-    setMcqCompleted(false);
-    setMcqSubmitted(false);
-    setMcqResult(null);
+  const isCodingStage = quizStage === "coding";
 
-    setAiQuestions([]);
-    setAiAnswers({});
-    setAiIndex(0);
-    setAiCompleted(false);
-    setAiSubmitted(false);
-    setAiResult(null);
+  const currentQuestions = quizStage === "mcq" ? mcqQuestions : aiQuestions;
+  const currentIndex = quizStage === "mcq" ? mcqIndex : aiIndex;
+  const currentQuestion = currentQuestions[currentIndex];
+  const currentAnswers = quizStage === "mcq" ? mcqAnswers : aiAnswers;
+  const totalQuestions = currentQuestions.length;
 
-    localStorage.removeItem(storageKey);
-  }, [storageKey]);
+  const answeredCount =
+    quizStage === "mcq"
+      ? Object.keys(mcqAnswers).length
+      : quizStage === "ai"
+      ? Object.keys(aiAnswers).length
+      : codingAnswer.trim()
+      ? 1
+      : 0;
+
+  const progressPercent = isCodingStage
+    ? codingResult
+      ? 100
+      : codingAnswer.trim()
+      ? 70
+      : 30
+    : totalQuestions
+    ? Math.round(((currentIndex + 1) / totalQuestions) * 100)
+    : 0;
 
   const fetchMcqQuestions = useCallback(async () => {
     if (!user?.id) {
-      setError("User not found. Please login again.");
+      navigate("/login");
       return;
     }
 
@@ -82,16 +129,14 @@ function TopicQuiz() {
       `${API_BASE}/topic/${topicId}/questions/${user.id}`
     );
 
-    setMcqQuestions(res?.data || []);
-  }, [topicId, user?.id]);
+    setMcqQuestions(Array.isArray(res.data) ? res.data : []);
+  }, [topicId, user?.id, navigate]);
 
   const fetchAiQuestions = useCallback(async () => {
-    if (!user?.id) {
-      setError("User not found. Please login again.");
-      return;
-    }
+    if (!user?.id) return;
 
     setAiLoading(true);
+    setError("");
 
     try {
       const res = await axios.post(`${API_BASE}/ai/generate-quiz`, {
@@ -100,73 +145,56 @@ function TopicQuiz() {
         count: 5,
       });
 
-      setAiQuestions(res?.data?.questions || []);
+      const questions = res.data?.questions || res.data || [];
+      setAiQuestions(Array.isArray(questions) ? questions : []);
+      setAiIndex(0);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load AI quiz questions.");
     } finally {
       setAiLoading(false);
     }
   }, [topicId, user?.id]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const loadQuiz = async () => {
+    async function load() {
       try {
         setLoading(true);
         setError("");
-
-        if (!user?.id) {
-          setError("User not found. Please login again.");
-          return;
-        }
-
         await fetchMcqQuestions();
-
-        const saved = localStorage.getItem(storageKey);
-
-        if (saved && isMounted) {
-          const parsed = JSON.parse(saved);
-
-          setQuizStage(parsed.quizStage || "mcq");
-
-          setMcqAnswers(parsed.mcqAnswers || {});
-          setMcqIndex(parsed.mcqIndex || 0);
-          setMcqCompleted(Boolean(parsed.mcqCompleted));
-          setMcqSubmitted(Boolean(parsed.mcqSubmitted));
-          setMcqResult(parsed.mcqResult || null);
-
-          setAiQuestions(parsed.aiQuestions || []);
-          setAiAnswers(parsed.aiAnswers || {});
-          setAiIndex(parsed.aiIndex || 0);
-          setAiCompleted(Boolean(parsed.aiCompleted));
-          setAiSubmitted(Boolean(parsed.aiSubmitted));
-          setAiResult(parsed.aiResult || null);
-          setResult(parsed.result || null);
-        }
       } catch (err) {
-        console.error("LOAD QUIZ ERROR:", err);
-        if (isMounted) {
-          setError(
-            err?.response?.data?.message ||
-              "Failed to load quiz. Please try again."
-          );
-        }
+        console.error(err);
+        setError("Failed to load quiz questions.");
       } finally {
-        if (isMounted) {
-          setLoading(false);
-          setAiLoading(false);
-        }
+        setLoading(false);
       }
-    };
+    }
 
-    loadQuiz();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [fetchMcqQuestions, storageKey, user?.id]);
+    load();
+  }, [fetchMcqQuestions]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return;
+
+    try {
+      const parsed = JSON.parse(saved);
+      setQuizStage(parsed.quizStage || "mcq");
+      setMcqAnswers(parsed.mcqAnswers || {});
+      setMcqIndex(parsed.mcqIndex || 0);
+      setAiAnswers(parsed.aiAnswers || {});
+      setAiIndex(parsed.aiIndex || 0);
+      setCodingAnswer(parsed.codingAnswer || "");
+      setMcqScore(parsed.mcqScore || 0);
+      setAiScore(parsed.aiScore || 0);
+      setAiSubmitFeedback(parsed.aiSubmitFeedback || "");
+    } catch {
+      localStorage.removeItem(storageKey);
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (result) return;
 
     localStorage.setItem(
       storageKey,
@@ -174,268 +202,216 @@ function TopicQuiz() {
         quizStage,
         mcqAnswers,
         mcqIndex,
-        mcqCompleted,
-        mcqSubmitted,
-        mcqResult,
-        aiQuestions,
         aiAnswers,
         aiIndex,
-        aiCompleted,
-        aiSubmitted,
-        aiResult,
-        result,
+        codingAnswer,
+        mcqScore,
+        aiScore,
+        aiSubmitFeedback,
       })
     );
   }, [
     storageKey,
-    user?.id,
     quizStage,
     mcqAnswers,
     mcqIndex,
-    mcqCompleted,
-    mcqSubmitted,
-    mcqResult,
-    aiQuestions,
     aiAnswers,
     aiIndex,
-    aiCompleted,
-    aiSubmitted,
-    aiResult,
+    codingAnswer,
+    mcqScore,
+    aiScore,
+    aiSubmitFeedback,
     result,
   ]);
 
-  const isAiStage = quizStage === "ai";
-
-  const activeQuestions = isAiStage ? aiQuestions : mcqQuestions;
-  const activeAnswers = isAiStage ? aiAnswers : mcqAnswers;
-  const currentQuestionIndex = isAiStage ? aiIndex : mcqIndex;
-  const currentQuestion = activeQuestions[currentQuestionIndex];
-  const totalQuestions = activeQuestions.length;
-  const answeredCount = Object.keys(activeAnswers).length;
-
-  const progress =
-    totalQuestions > 0
-      ? ((currentQuestionIndex + 1) / totalQuestions) * 100
-      : 0;
-
-  const totalAnsweredAll = useMemo(() => {
-    return Object.keys(mcqAnswers).length + Object.keys(aiAnswers).length;
-  }, [mcqAnswers, aiAnswers]);
-
-  const totalAllQuestions = useMemo(() => {
-    return mcqQuestions.length + aiQuestions.length;
-  }, [mcqQuestions.length, aiQuestions.length]);
-
-  const handleSelect = (questionId, option) => {
-    setError("");
-
-    if (isAiStage) {
-      setAiAnswers((prev) => ({
-        ...prev,
-        [questionId]: option,
-      }));
+  function selectAnswer(questionId, option) {
+    if (quizStage === "mcq") {
+      setMcqAnswers((prev) => ({ ...prev, [questionId]: option }));
     } else {
-      setMcqAnswers((prev) => ({
-        ...prev,
-        [questionId]: option,
-      }));
+      setAiAnswers((prev) => ({ ...prev, [questionId]: option }));
     }
-  };
+  }
 
-  const handleNext = () => {
-    if (currentQuestionIndex < totalQuestions - 1) {
-      if (isAiStage) {
-        setAiIndex((prev) => prev + 1);
-      } else {
-        setMcqIndex((prev) => prev + 1);
-      }
+  function goNext() {
+    if (currentIndex < totalQuestions - 1) {
+      if (quizStage === "mcq") setMcqIndex((prev) => prev + 1);
+      else setAiIndex((prev) => prev + 1);
     }
-  };
+  }
 
-  const handlePrevious = () => {
-    if (currentQuestionIndex > 0) {
-      if (isAiStage) {
-        setAiIndex((prev) => prev - 1);
-      } else {
-        setMcqIndex((prev) => prev - 1);
-      }
+  function goPrev() {
+    if (currentIndex > 0) {
+      if (quizStage === "mcq") setMcqIndex((prev) => prev - 1);
+      else setAiIndex((prev) => prev - 1);
     }
-  };
+  }
 
-  const handleFinishMcq = async () => {
-    try {
-      if (!user?.id) {
-        setError("User not found. Please login again.");
-        return;
-      }
+  async function startAiStage() {
+    const allMcqAnswered = mcqQuestions.every((q) => mcqAnswers[q.id]);
 
-      if (mcqQuestions.length === 0) {
-        setError("No normal quiz questions available.");
-        return;
-      }
-
-      if (Object.keys(mcqAnswers).length < mcqQuestions.length) {
-        setError("Please answer all multiple choice questions first.");
-        return;
-      }
-
-      setError("");
-      setMcqCompleted(true);
-      setQuizStage("ai");
-
-      if (aiQuestions.length === 0) {
-        await fetchAiQuestions();
-      }
-    } catch (err) {
-      console.error("FINISH MCQ ERROR:", err);
-      setError(
-        err?.response?.data?.message ||
-          "Failed to prepare AI quiz. Please try again."
-      );
+    if (!allMcqAnswered) {
+      setError("Please answer all standard questions first.");
+      return;
     }
-  };
 
-  const handleBackToMcq = () => {
     setError("");
-    setQuizStage("mcq");
-  };
+    setQuizStage("ai");
 
-  const submitMcqQuiz = async () => {
-    if (mcqSubmitted) return mcqResult;
+    if (aiQuestions.length === 0) {
+      await fetchAiQuestions();
+    }
+  }
 
-    const formattedAnswers = mcqQuestions.map((q) => ({
-      questionId: q.id,
-      answer: mcqAnswers[q.id],
-    }));
+  async function startCodingStage() {
+    const allAiAnswered = aiQuestions.every((q) => aiAnswers[q.id]);
 
-    const res = await axios.post(`${API_BASE}/topic/submit-quiz`, {
-      userId: user.id,
-      topicId: Number(topicId),
-      answers: formattedAnswers,
-    });
+    if (!allAiAnswered) {
+      setError("Please answer all AI questions first.");
+      return;
+    }
 
-    setMcqSubmitted(true);
-    setMcqResult(res.data);
-    return res.data;
-  };
-
-  const submitAiQuiz = async () => {
-    if (aiSubmitted) return aiResult;
-
-    const formattedAnswers = aiQuestions.map((q) => ({
-      questionId: q.id,
-      answer: aiAnswers[q.id],
-    }));
-
-    const res = await axios.post(`${API_BASE}/ai/submit-quiz`, {
-      userId: user.id,
-      topicId: Number(topicId),
-      answers: formattedAnswers,
-      aiMode: true,
-    });
-
-    setAiSubmitted(true);
-    setAiResult(res.data);
-    return res.data;
-  };
-
-  const handleSubmitFinal = async () => {
     try {
-      if (!user?.id) {
-        setError("User not found. Please login again.");
-        return;
-      }
+      setCodingLoading(true);
+      setError("");
 
-      if (aiQuestions.length === 0) {
-        setError("No AI questions available.");
-        return;
-      }
+      const mcqRes = await axios.post(`${API_BASE}/topic/submit-quiz`, {
+        userId: user.id,
+        topicId: Number(topicId),
+        answers: mcqQuestions.map((q) => ({
+          questionId: q.id,
+          answer: mcqAnswers[q.id],
+        })),
+      });
 
-      if (Object.keys(aiAnswers).length < aiQuestions.length) {
-        setError("Please answer all AI questions before submitting.");
-        return;
-      }
+      const aiRes = await axios.post(`${API_BASE}/ai/submit-quiz`, {
+        userId: user.id,
+        topicId: Number(topicId),
+        answers: aiQuestions.map((q) => ({
+          questionId: q.id,
+          answer: aiAnswers[q.id],
+        })),
+        aiMode: true,
+      });
 
+      const mcqCalculatedScore = Number(mcqRes.data?.score || 0);
+      const aiCalculatedScore = Number(aiRes.data?.score || 0);
+      const feedback = getAiFeedback(aiRes.data);
+
+      setMcqScore(mcqCalculatedScore);
+      setAiScore(aiCalculatedScore);
+      setAiSubmitFeedback(feedback);
+
+      const codingRes = await axios.post(
+        `${API_BASE}/ai/generate-coding-question`,
+        {
+          userId: user.id,
+          topicId: Number(topicId),
+          mcqScore: mcqCalculatedScore,
+          aiScore: aiCalculatedScore,
+        }
+      );
+
+      setCodingQuestion(codingRes.data);
+      setCodingAnswer(codingRes.data?.starter_code || "");
+      setCodingResult(null);
+      setQuizStage("coding");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to generate coding question.");
+    } finally {
+      setCodingLoading(false);
+    }
+  }
+
+  async function submitCodingAnswer() {
+    if (!codingAnswer.trim()) {
+      setError("Please write your code first.");
+      return;
+    }
+
+    if (!codingQuestion) {
+      setError("Coding question is not loaded.");
+      return;
+    }
+
+    try {
+      setCodingLoading(true);
+      setError("");
+
+      const res = await axios.post(`${API_BASE}/ai/code-review`, {
+        fieldName: codingQuestion.field_name || "Programming Fundamentals",
+        language: codingQuestion.language || "JavaScript",
+        code: codingAnswer,
+        questionTitle: codingQuestion.title,
+        questionDescription: codingQuestion.description,
+        expectedOutput: codingQuestion.expected_output,
+      });
+
+      setCodingResult(res.data);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to review code.");
+    } finally {
+      setCodingLoading(false);
+    }
+  }
+
+  async function handleSubmitFinal() {
+    if (!codingResult) {
+      setError("Please submit your coding answer first.");
+      return;
+    }
+
+    try {
       setSubmitting(true);
       setError("");
-      setAiCompleted(true);
 
-      const mcqResponse = await submitMcqQuiz();
-      const aiResponse = await submitAiQuiz();
+      const finalMcqScore = Number(mcqScore || 0);
+      const finalAiScore = Number(aiScore || 0);
+      const codingScore = getCodingScore(codingResult) || 70;
 
-      const combinedScore = Math.round(
-        ((Number(mcqResponse?.score || 0) + Number(aiResponse?.score || 0)) / 2)
+      const finalScore = Math.round(
+        (finalMcqScore + finalAiScore + codingScore) / 3
       );
 
-      const finalPassed =
-        Boolean(mcqResponse?.passed) && Boolean(aiResponse?.passed);
+      const passed = finalScore >= 60;
 
-      const finalAnalysis = [mcqResponse?.analysis, aiResponse?.analysis]
-        .filter(Boolean)
-        .join("\n\n");
+      const feedback =
+        aiSubmitFeedback ||
+        codingResult?.explanation ||
+        codingResult?.feedback ||
+        "";
 
-      const finalResult = {
-        passed: finalPassed,
-        score: combinedScore,
-        message: finalPassed
-          ? "Both quiz sections were completed successfully."
-          : "One or both sections were not passed. Please try again.",
-        analysis: finalAnalysis,
-        mcqScore: mcqResponse?.score ?? 0,
-        aiScore: aiResponse?.score ?? 0,
-      };
-
-      setResult(finalResult);
       localStorage.removeItem(storageKey);
+
+      setResult({
+        passed,
+        score: finalScore,
+        mcqScore: finalMcqScore,
+        aiScore: finalAiScore,
+        codingScore,
+        feedback,
+        codingResult,
+        message: passed ? "Completed Successfully" : "Try Again",
+      });
     } catch (err) {
-      console.error("FINAL SUBMIT ERROR:", err);
-      setError(
-        err?.response?.data?.message ||
-          "Failed to submit quiz. Please try again."
-      );
+      console.error(err);
+      setError("Failed to submit quiz.");
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleBack = () => {
-    navigate(-1);
-  };
-
-  const handleGoTopic = () => {
-    navigate(`/topic/${topicId}`);
-  };
-
-  const handleGoDashboard = () => {
-    navigate("/dashboard");
-  };
-
-  const handleRetry = async () => {
-    try {
-      resetAllState();
-      setLoading(true);
-      await fetchMcqQuestions();
-    } catch (err) {
-      console.error("RETRY QUIZ ERROR:", err);
-      setError(
-        err?.response?.data?.message ||
-          "Failed to reload quiz. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  }
 
   if (loading) {
     return (
       <>
         <Navbar />
-        <div className="topic-quiz-page">
-          <div className="topic-quiz-card">
-            <h2>Loading Quiz...</h2>
-            <p>Please wait while we prepare your questions.</p>
+        <main className="topic-quiz-page">
+          <div className="topic-quiz-card loading-card">
+            <div className="quiz-loader"></div>
+            <h2>Loading quiz...</h2>
           </div>
-        </div>
+        </main>
       </>
     );
   }
@@ -444,51 +420,95 @@ function TopicQuiz() {
     return (
       <>
         <Navbar />
-        <div className="topic-quiz-page">
+        <main className="topic-quiz-page">
           <div className="topic-quiz-card result-card">
-            <div className="result-badge">Topic Quiz + AI Quiz</div>
-
-            <h1>{result.passed ? "Quiz Passed 🎉" : "Quiz Not Passed"}</h1>
-
-            <div className="result-box">
-              <p>
-                <strong>Final Score:</strong> {result.score}%
-              </p>
-              <p>
-                <strong>MCQ Score:</strong> {result.mcqScore ?? 0}%
-              </p>
-              <p>
-                <strong>AI Score:</strong> {result.aiScore ?? 0}%
-              </p>
-              <p>
-                <strong>Status:</strong>{" "}
-                {result.passed ? "Completed" : "Try Again"}
-              </p>
-              {result.message && <p>{result.message}</p>}
+            <div className={result.passed ? "result-icon pass" : "result-icon fail"}>
+              {result.passed ? "✓" : "!"}
             </div>
 
-            {result.analysis && (
-              <div className="analysis-box">
+            <h1>{result.passed ? "Quiz Passed" : "Quiz Not Passed"}</h1>
+            <p className="result-message">{result.message}</p>
+
+            <div className="score-grid">
+              <div>
+                <span>Final Score</span>
+                <strong>{result.score}%</strong>
+              </div>
+              <div>
+                <span>MCQ Score</span>
+                <strong>{result.mcqScore}%</strong>
+              </div>
+              <div>
+                <span>AI Score</span>
+                <strong>{result.aiScore}%</strong>
+              </div>
+              <div>
+                <span>Coding Score</span>
+                <strong>{result.codingScore}%</strong>
+              </div>
+            </div>
+
+            <div className="ai-feedback-box">
+              <div className="ai-feedback-title">
+                <span>🤖</span>
                 <h3>AI Feedback</h3>
-                <pre>{result.analysis}</pre>
+              </div>
+
+              {result.feedback ? (
+                <pre>{result.feedback}</pre>
+              ) : (
+                <p>No AI feedback was returned from the server.</p>
+              )}
+            </div>
+
+            {result.codingResult && (
+              <div className="ai-feedback-box">
+                <h3>Coding Review</h3>
+
+                {result.codingResult.errors?.length > 0 && (
+                  <>
+                    <h4>Errors</h4>
+                    <ul>
+                      {result.codingResult.errors.map((err, index) => (
+                        <li key={index}>{err}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+
+                <h4>Corrected Code</h4>
+                <pre className="code-snippet">
+                  <code>
+                    {result.codingResult.correctedCode ||
+                      result.codingResult.ai_fixed_code ||
+                      "No corrected code returned."}
+                  </code>
+                </pre>
+
+                <h4>Explanation</h4>
+                <p>
+                  {result.codingResult.explanation ||
+                    result.codingResult.feedback ||
+                    "No explanation returned."}
+                </p>
               </div>
             )}
 
             <div className="quiz-actions">
-              <button className="nav-btn outline" onClick={handleRetry}>
-                Retry Quiz
+              <button className="secondary-btn" onClick={() => window.location.reload()}>
+                Retry
               </button>
 
-              <button className="nav-btn outline" onClick={handleGoTopic}>
-                Back to Topic
-              </button>
+              <button className="primary-btn" onClick={() => navigate("/dashboard")}>
+  Continue Roadmap
+</button>
 
-              <button className="nav-btn primary" onClick={handleGoDashboard}>
-                Back to Dashboard
+              <button className="secondary-btn" onClick={() => navigate("/dashboard")}>
+                Dashboard
               </button>
             </div>
           </div>
-        </div>
+        </main>
       </>
     );
   }
@@ -497,198 +517,264 @@ function TopicQuiz() {
     <>
       <Navbar />
 
-      <div className="topic-quiz-page">
-        <div className="topic-quiz-card">
-          <div className="quiz-topbar">
-            <button className="back-btn" onClick={handleBack}>
-              ← Back
-            </button>
+      <main className="topic-quiz-page">
+        <section className="topic-quiz-card">
+          <div className="quiz-header">
+            <div>
+              <span className="quiz-badge">
+                {quizStage === "mcq"
+                  ? "Standard Quiz"
+                  : quizStage === "ai"
+                  ? "AI Code Quiz"
+                  : "Coding Challenge"}
+              </span>
 
-            <div className="quiz-progress">
-              Answered {totalAnsweredAll} / {totalAllQuestions || mcqQuestions.length}
+              <h1>Topic Quiz</h1>
+
+              {quizStage === "coding" ? (
+                <p>Write, submit, and review your code with Cognito AI.</p>
+              ) : (
+                <p>
+                  Question {totalQuestions ? currentIndex + 1 : 0} of {totalQuestions}
+                </p>
+              )}
+            </div>
+
+            <div className="quiz-stage-tabs">
+              <button className={quizStage === "mcq" ? "active" : ""}>
+                MCQ
+              </button>
+              <button className={quizStage === "ai" ? "active" : ""}>
+                AI
+              </button>
+              <button className={quizStage === "coding" ? "active" : ""}>
+                Coding
+              </button>
             </div>
           </div>
 
-          <div
-            className="quiz-mode-switch"
-            style={{ pointerEvents: "none", opacity: 0.95 }}
-          >
-            <button className={`mode-btn ${!isAiStage ? "active" : ""}`}>
-              1. Normal Quiz
-            </button>
-
-            <button className={`mode-btn ${isAiStage ? "active" : ""}`}>
-              2. AI Smart Quiz 🤖
-            </button>
+          <div className="progress-wrap">
+            <div className="progress-bar">
+              <span style={{ width: `${progressPercent}%` }}></span>
+            </div>
+            <small>{answeredCount} answered</small>
           </div>
-
-          <h1 className="quiz-title">
-            {isAiStage ? "AI Topic Quiz" : "Topic Quiz"}
-          </h1>
-
-          <p className="quiz-subtitle">
-            {isAiStage
-              ? "Complete the AI-generated section to finish this topic."
-              : "Finish the normal quiz first, then continue to the AI section."}
-          </p>
-
-          {mcqCompleted && !isAiStage && (
-            <div className="analysis-box">
-              <h3>Normal Quiz Completed</h3>
-              <p>You already finished the first section. Continue to AI when ready.</p>
-            </div>
-          )}
-
-          {isAiStage && (
-            <div className="analysis-box">
-              <h3>Final Step</h3>
-              <p>
-                The AI section is required. Your MCQ progress is saved and will not be lost.
-              </p>
-            </div>
-          )}
 
           {error && <div className="quiz-error">{error}</div>}
 
-          {aiLoading && (
+          {quizStage === "coding" ? (
+            <div className="question-card coding-section">
+              {codingLoading && !codingQuestion ? (
+                <div className="ai-loading-box">
+                  <div className="quiz-loader"></div>
+                  <h2>Generating coding question...</h2>
+                  <p>Cognito AI is adapting the question to your quiz performance.</p>
+                </div>
+              ) : codingQuestion ? (
+                <>
+                  <div className="question-top">
+                    <span className="question-number">Coding Challenge</span>
+                    <span className="question-type">AI Code Evaluation</span>
+                  </div>
+
+                  <h2>{codingQuestion.title || "Coding Question"}</h2>
+
+                  <p>{codingQuestion.description}</p>
+
+                  {codingQuestion.expected_output && (
+                    <div className="ai-feedback-box">
+                      <h3>Expected Output</h3>
+                      <p>{codingQuestion.expected_output}</p>
+                    </div>
+                  )}
+
+                  {codingQuestion.starter_code && (
+                    <>
+                      <h3>Starter Code</h3>
+                      <pre className="code-snippet">
+                        <code>{codingQuestion.starter_code}</code>
+                      </pre>
+                    </>
+                  )}
+
+                  <textarea
+                    className="coding-textarea"
+                    value={codingAnswer}
+                    onChange={(e) => {
+                      setCodingAnswer(e.target.value);
+                      setCodingResult(null);
+                    }}
+                    placeholder="Write your code here..."
+                  />
+
+                  <button
+                    className="primary-btn"
+                    disabled={codingLoading}
+                    onClick={submitCodingAnswer}
+                  >
+                    {codingLoading ? "Reviewing..." : "Submit Code"}
+                  </button>
+
+                  {codingResult && (
+                    <div className="ai-feedback-box">
+                      <h3>AI Code Review</h3>
+
+                      <p>
+                        <strong>Score:</strong> {getCodingScore(codingResult) || 70}%
+                      </p>
+
+                      {codingResult.errors?.length > 0 && (
+                        <>
+                          <h4>Errors</h4>
+                          <ul>
+                            {codingResult.errors.map((err, index) => (
+                              <li key={index}>{err}</li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+
+                      <h4>Corrected Code</h4>
+                      <pre className="code-snippet">
+                        <code>
+                          {codingResult.correctedCode ||
+                            codingResult.ai_fixed_code ||
+                            "No corrected code returned."}
+                        </code>
+                      </pre>
+
+                      <h4>Explanation</h4>
+                      <p>
+                        {codingResult.explanation ||
+                          codingResult.feedback ||
+                          "No explanation returned."}
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="empty-quiz">
+                  <h2>No coding question available</h2>
+                  <p>Could not generate a coding question right now.</p>
+                </div>
+              )}
+            </div>
+          ) : aiLoading ? (
             <div className="ai-loading-box">
-              <div className="ai-spinner"></div>
-              <h3>AI is generating your quiz...</h3>
-              <p>Please wait a few seconds while smart questions are prepared.</p>
+              <div className="quiz-loader"></div>
+              <h2>Generating AI questions...</h2>
+              <p>Please wait while Cognito creates personalized code questions.</p>
+            </div>
+          ) : currentQuestion ? (
+            <div className="question-card">
+              <div className="question-top">
+                <span className="question-number">Q{currentIndex + 1}</span>
+                <span className="question-type">
+                  {getQuestionTypeLabel(currentQuestion.question_type, quizStage === "ai")}
+                </span>
+              </div>
+
+              <h2>{getQuestionText(currentQuestion)}</h2>
+
+              {currentQuestion.code_snippet && (
+                <pre className="code-snippet">
+                  <code>{currentQuestion.code_snippet}</code>
+                </pre>
+              )}
+
+              <div className="options-grid">
+                {["A", "B", "C", "D"].map((opt) => {
+                  const selected = currentAnswers[currentQuestion.id] === opt;
+                  const optionText = getOptionText(currentQuestion, opt);
+
+                  return (
+                    <button
+                      key={opt}
+                      className={`option-btn ${selected ? "selected" : ""}`}
+                      onClick={() => selectAnswer(currentQuestion.id, opt)}
+                    >
+                      <span className="option-letter">{opt}</span>
+                      <span>{optionText || opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="empty-quiz">
+              <h2>No questions available</h2>
+              <p>This topic does not have questions yet.</p>
             </div>
           )}
 
-          {!aiLoading && activeQuestions.length === 0 ? (
-            <div className="quiz-empty">
-              <p>
-                {isAiStage
-                  ? "No AI quiz questions were generated for this topic."
-                  : "No quiz questions found for this topic."}
-              </p>
-            </div>
-          ) : null}
+          <div className="quiz-footer">
+            {quizStage !== "coding" && (
+              <button
+                className="secondary-btn"
+                onClick={goPrev}
+                disabled={currentIndex === 0 || aiLoading}
+              >
+                Previous
+              </button>
+            )}
 
-          {!aiLoading && activeQuestions.length > 0 && currentQuestion && (
-            <>
-              <div className="progress-info">
-                <span>
-                  {isAiStage ? "AI Question" : "Question"} {currentQuestionIndex + 1} of{" "}
-                  {totalQuestions}
-                </span>
-                <span>{Math.round(progress)}%</span>
+            {quizStage !== "coding" && (
+              <div className="dots">
+                {currentQuestions.map((q, index) => (
+                  <button
+                    key={q.id || index}
+                    className={[
+                      index === currentIndex ? "current" : "",
+                      currentAnswers[q.id] ? "answered" : "",
+                    ].join(" ")}
+                    onClick={() =>
+                      quizStage === "mcq" ? setMcqIndex(index) : setAiIndex(index)
+                    }
+                  >
+                    {index + 1}
+                  </button>
+                ))}
               </div>
+            )}
 
-              <div className="progress-bar">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-
-              <div className="question-box single-question-card">
-                <div className="question-header-row">
-                  <span className="question-type-badge">
-                    {getQuestionTypeLabel(currentQuestion.question_type, isAiStage)}
-                  </span>
-                </div>
-
-                <div className="question-title">
-                  <span className="question-number">
-                    {currentQuestionIndex + 1}.
-                  </span>
-                  <span>
-                    {currentQuestion.question_text || currentQuestion.question}
-                  </span>
-                </div>
-
-                {currentQuestion.code_snippet && (
-                  <div className="code-block">
-                    <pre>
-                      <code>{currentQuestion.code_snippet}</code>
-                    </pre>
-                  </div>
-                )}
-
-                <div className="options-list">
-                  {[
-                    ["A", currentQuestion.option_a],
-                    ["B", currentQuestion.option_b],
-                    ["C", currentQuestion.option_c],
-                    ["D", currentQuestion.option_d],
-                  ]
-                    .filter(
-                      ([, text]) =>
-                        text !== undefined && text !== null && text !== ""
-                    )
-                    .map(([key, text]) => (
-                      <label
-                        key={key}
-                        className={`option-card ${
-                          activeAnswers[currentQuestion.id] === key ? "selected" : ""
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name={`q-${currentQuestion.id}`}
-                          checked={activeAnswers[currentQuestion.id] === key}
-                          onChange={() => handleSelect(currentQuestion.id, key)}
-                        />
-                        <span className="option-key">{key}</span>
-                        <span className="option-text">{text}</span>
-                      </label>
-                    ))}
-                </div>
-              </div>
-
-              <div className="question-navigation">
+            {quizStage === "coding" ? (
+              <>
                 <button
-                  className="nav-btn outline"
-                  onClick={handlePrevious}
-                  disabled={currentQuestionIndex === 0 || submitting}
+                  className="secondary-btn"
+                  onClick={() => setQuizStage("ai")}
+                  disabled={submitting || codingLoading}
                 >
-                  Previous
+                  Back to AI Quiz
                 </button>
 
-                {currentQuestionIndex < totalQuestions - 1 ? (
-                  <button
-                    className="nav-btn primary"
-                    onClick={handleNext}
-                    disabled={submitting}
-                  >
-                    Next
-                  </button>
-                ) : isAiStage ? (
-                  <>
-                    <button
-                      className="nav-btn outline"
-                      onClick={handleBackToMcq}
-                      disabled={submitting}
-                    >
-                      Back to MCQ
-                    </button>
-
-                    <button
-                      className="nav-btn secondary"
-                      onClick={handleSubmitFinal}
-                      disabled={submitting}
-                    >
-                      {submitting ? "Submitting Final Quiz..." : "Submit Final Quiz"}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    className="nav-btn secondary"
-                    onClick={handleFinishMcq}
-                    disabled={submitting}
-                  >
-                    Continue to AI Quiz
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+                <button
+                  className="primary-btn"
+                  onClick={handleSubmitFinal}
+                  disabled={submitting || codingLoading || !codingResult}
+                >
+                  {submitting ? "Submitting..." : "Submit Final"}
+                </button>
+              </>
+            ) : currentIndex < totalQuestions - 1 ? (
+              <button className="primary-btn" onClick={goNext} disabled={aiLoading}>
+                Next
+              </button>
+            ) : quizStage === "mcq" ? (
+              <button className="primary-btn" onClick={startAiStage} disabled={aiLoading}>
+                Go to AI Quiz
+              </button>
+            ) : (
+              <button
+                className="primary-btn"
+                onClick={startCodingStage}
+                disabled={submitting || aiLoading || codingLoading}
+              >
+                {codingLoading ? "Generating..." : "Go to Coding Question"}
+              </button>
+            )}
+          </div>
+        </section>
+      </main>
     </>
   );
 }
